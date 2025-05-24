@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import Cookies from "js-cookie";
 
 export interface AppConfigState {
   themeMode: "light" | "dark";
@@ -16,11 +17,20 @@ const appConfigSlice = createSlice({
   reducers: {
     toggleThemeMode(
       state,
-      action: PayloadAction<"light" | "dark" | undefined>
+      action: PayloadAction<
+        | {
+            mode?: "light" | "dark" | undefined;
+            seToCookie?: boolean;
+          }
+        | undefined
+      >
     ) {
       const { payload } = action;
       state.themeMode =
-        payload || state.themeMode === "light" ? "dark" : "light";
+        payload?.mode ?? (state.themeMode === "light" ? "dark" : "light");
+      if (payload?.seToCookie) {
+        Cookies.set("themeMode", state.themeMode);
+      }
     },
     toggleAIChatSidebar(state, action: PayloadAction<boolean | undefined>) {
       if (action.payload !== undefined) {

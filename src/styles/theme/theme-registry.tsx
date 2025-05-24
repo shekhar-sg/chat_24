@@ -6,20 +6,20 @@ import { AppRouterCacheProvider } from "@mui/material-nextjs/v15-appRouter";
 import CssBaseline from "@mui/material/CssBaseline";
 import { type ReactNode, useMemo } from "react";
 
-interface ThemeRegistryProps {
+export interface ThemeRegistryProps {
   children: ReactNode;
 }
 
 const ThemeRegistry = (props: ThemeRegistryProps) => {
   const { children } = props;
-  const mode = useAppSelector((state) => state.appConfig.themeMode);
+  const themeMode = useAppSelector(({ appConfig }) => appConfig.themeMode);
 
-  const theme = useMemo(() => generateTheme(mode), [mode]);
+  const theme = useMemo(() => generateTheme(themeMode), [themeMode]);
 
   return (
     <AppRouterCacheProvider>
       <ThemeProvider theme={theme}>
-        <CssBaseline />
+        <CssBaseline enableColorScheme />
         {children}
       </ThemeProvider>
     </AppRouterCacheProvider>

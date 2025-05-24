@@ -50,13 +50,19 @@ function ChatToolbar(props: ChatToolbarProps) {
         <Typography variant="h6" noWrap sx={{ flexGrow: 1 }} component="div">
           {userName}
         </Typography>
-        <IconButton color="inherit" aria-label="toggle theme" size={"small"}>
+        <IconButton color="inherit" aria-label="menu" size={"small"}>
           <MoreHoriz fontSize={"small"} />
         </IconButton>
         <IconButton
           color="inherit"
           aria-label="toggle theme"
-          onClick={() => dispatch(toggleThemeMode())}
+          onClick={() => {
+            dispatch(
+              toggleThemeMode({
+                seToCookie: true,
+              })
+            );
+          }}
           size={"small"}
         >
           <Brightness4 fontSize={"small"} />
