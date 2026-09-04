@@ -5,6 +5,9 @@ import Cookies from "js-cookie";
 import { type ReactNode, useEffect, useRef } from "react";
 import { Provider } from "react-redux";
 import { AppStore, makeStore } from "./";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/firebase/config";
+import { setUser } from "@/store/slices/authSlice";
 
 export default function StoreProvider({
   children,
@@ -21,6 +24,12 @@ export default function StoreProvider({
       toggleThemeMode({ mode: cookieThemeMode ?? "light" })
     );
   }
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      storeRef.current?.dispatch(setUser(user));
+    });
+  }, []);
 
   useEffect(() => {
     if (!Cookies.get("themeMode")) {
