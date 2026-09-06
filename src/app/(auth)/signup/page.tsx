@@ -14,11 +14,13 @@ import {
 } from "@mui/material";
 import { registerUser } from "@/firebase/auth";
 import { createUserProfile } from "@/firebase/users";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const router = useRouter();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -30,17 +32,32 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const { user } = await registerUser(email, password);
+      const credential = await registerUser(email, password);
 
-      await createUserProfile(user.uid, {
+      await createUserProfile(credential.user.uid, {
         name,
-        email: user.email!,
+        email: credential.user.email ?? email,
+        photoURL: credential.user.photoURL ?? undefined,
       });
 
-      console.log("User registered:", user.uid);
+      const idToken = await credential.user.getIdToken();
+
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      router.push("/");
     } catch (error) {
+      console.error("Signup failed:", error);
       setError("Unable to create account. Please try again.");
-      console.error(error);
     } finally {
       setLoading(false);
     }

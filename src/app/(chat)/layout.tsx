@@ -3,8 +3,7 @@
 import AISectionTabs from "@/components/AISectionTabs";
 import PaperForAISection from "@/components/PaperForAISection";
 import UserList from "@/components/UserList";
-import { users } from "@/content/users";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
 import {
   Paper,
@@ -15,6 +14,7 @@ import {
 } from "@mui/material";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
+import { useGetUsersQuery } from "@/store/api/userApi";
 
 export default function ChatLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -22,6 +22,22 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
   const isBelowMd = useMediaQuery((theme) => theme.breakpoints.down("md"));
   const isBelowLg = useMediaQuery((theme) => theme.breakpoints.down("lg"));
   const dispatch = useAppDispatch();
+
+  const currentUser = useAppSelector((state) => state.auth.user);
+
+  const {
+    data: users = [],
+    isLoading: usersLoading,
+    error: usersError,
+  } = useGetUsersQuery(currentUser?.uid ?? "", {
+    skip: !currentUser?.uid,
+  });
+  const chatUsers = users.map((user) => ({
+    id: user.uid,
+    name: user.name,
+    avatarUrl: user.photoURL ?? undefined,
+  }));
+
   useEffect(() => {
     if (isBelowLg) {
       console.log("Mobile view detected, toggling AI chat sidebar.");
@@ -66,7 +82,7 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
             Your Inbox
           </Typography>
         </Toolbar>
-        <UserList users={users} />
+        <UserList users={chatUsers} />
       </Paper>
       <Paper
         variant={"outlined"}

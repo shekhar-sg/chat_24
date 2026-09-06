@@ -1,8 +1,14 @@
 "use client";
-import { Person, Search, Sort, ViewList } from "@mui/icons-material";
+import { Logout, Person, Search, Sort, ViewList } from "@mui/icons-material";
 import {
   Avatar,
   Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   IconButton,
   InputBase,
@@ -19,7 +25,8 @@ import {
 } from "@mui/material";
 import { type ChangeEvent, type MouseEvent, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { logoutUser } from "@/firebase/auth";
 
 export interface User {
   id: string;
@@ -70,8 +77,10 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
   const [avatarView, setAvatarView] = useState<"avatar" | "no-avatar">(
     "avatar"
   );
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const params = useParams();
   const open = Boolean(anchorEl);
+  const router = useRouter();
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) =>
     setSearch(e.target.value);
@@ -115,6 +124,20 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       }
       return 0;
     });
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+
+      await fetch("/api/auth/session", {
+        method: "DELETE",
+      });
+
+      router.push("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   return (
     <Box
@@ -366,7 +389,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       {/* Toggle buttons at bottom left */}
       <Box
         display="flex"
-        justifyContent="flex-start"
+        justifyContent="space-between"
         alignItems="center"
         px={2}
         py={1}
@@ -385,6 +408,36 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
             <ViewList fontSize="small" />
           </ToggleButton>
         </ToggleButtonGroup>
+        <Button onClick={() => setLogoutDialogOpen(true)}>
+          <Logout />
+        </Button>
+        <Dialog
+          open={logoutDialogOpen}
+          onClose={() => setLogoutDialogOpen(false)}
+          aria-labelledby="logout-dialog-title"
+          aria-describedby="logout-dialog-description"
+        >
+          <DialogTitle id="logout-dialog-title">Logout?</DialogTitle>
+
+          <DialogContent>
+            <DialogContentText id="logout-dialog-description">
+              Are you sure you want to logout?
+            </DialogContentText>
+          </DialogContent>
+
+          <DialogActions>
+            <Button onClick={() => setLogoutDialogOpen(false)}>Cancel</Button>
+
+            <Button
+              onClick={handleLogout}
+              variant="contained"
+              color="error"
+              autoFocus
+            >
+              Logout
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

@@ -1,19 +1,28 @@
+"use client";
+
 import { Box, Typography } from "@mui/material";
 import { useEffect, useRef } from "react";
+import { Timestamp } from "firebase/firestore";
+import { useAppSelector } from "@/store/hooks";
+import type { Message } from "@/types/chat";
 import MessageBubble from "./MessageBubble";
-
-interface Message {
-  from: string;
-  message: string;
-  time: string;
-}
 
 interface MessageListProps {
   messages: Message[];
 }
 
+const formatMessageTime = (timestamp: Timestamp | null) => {
+  if (!timestamp) return "";
+
+  return timestamp.toDate().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const MessageList = ({ messages }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const currentUserId = useAppSelector((state) => state.auth.user?.uid);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,16 +46,21 @@ const MessageList = ({ messages }: MessageListProps) => {
           No messages yet. Start the conversation!
         </Typography>
       ) : (
-        messages.map((msg, idx) => (
-          <MessageBubble
-            key={idx}
-            from={msg.from}
-            message={msg.message}
-            time={msg.time}
-            isMe={msg.from === "Me"}
-          />
-        ))
+        messages.map((msg) => {
+          const isMe = msg.senderId === currentUserId;
+
+          return (
+            <MessageBubble
+              key={msg.id}
+              from={isMe ? "Me" : msg.senderId}
+              message={msg.text}
+              time={formatMessageTime(msg.createdAt)}
+              isMe={isMe}
+            />
+          );
+        })
       )}
+
       <div ref={bottomRef} />
     </Box>
   );

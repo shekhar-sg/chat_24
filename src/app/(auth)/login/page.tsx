@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import { loginUser } from "@/firebase/auth";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,6 +21,7 @@ export default function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -28,9 +30,23 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { user } = await loginUser(email, password);
+      const credential = await loginUser(email, password);
 
-      console.log("Logged in:", user.uid);
+      const idToken = await credential.user.getIdToken();
+
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      router.push("/");
     } catch (error) {
       console.error(error);
       setError("Invalid email or password.");

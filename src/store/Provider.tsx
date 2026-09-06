@@ -27,7 +27,18 @@ export default function StoreProvider({
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
-      storeRef.current?.dispatch(setUser(user));
+      if (user) {
+        storeRef.current?.dispatch(
+          setUser({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+          })
+        );
+      } else {
+        storeRef.current?.dispatch(setUser(null));
+      }
     });
   }, []);
 
