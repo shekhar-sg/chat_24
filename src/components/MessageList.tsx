@@ -2,17 +2,29 @@ import { Box, Typography } from "@mui/material";
 import { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
 
-interface Message {
-  from: string;
-  message: string;
-  time: string;
+import type { FirestoreMessage } from "@/types/firestore";
+
+interface Message extends FirestoreMessage {
+  id: string;
 }
 
 interface MessageListProps {
   messages: Message[];
+  currentUserId: string;
 }
 
-const MessageList = ({ messages }: MessageListProps) => {
+const formatMessageTime = (createdAt: FirestoreMessage["createdAt"]) => {
+  if (!createdAt) {
+    return "";
+  }
+
+  return createdAt.toDate().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const MessageList = ({ messages, currentUserId }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,13 +49,13 @@ const MessageList = ({ messages }: MessageListProps) => {
           No messages yet. Start the conversation!
         </Typography>
       ) : (
-        messages.map((msg, idx) => (
+        messages.map((msg) => (
           <MessageBubble
-            key={idx}
-            from={msg.from}
-            message={msg.message}
-            time={msg.time}
-            isMe={msg.from === "Me"}
+            key={msg.id}
+            from={msg.senderId}
+            message={msg.text}
+            time={formatMessageTime(msg.createdAt)}
+            isMe={msg.senderId === currentUserId}
           />
         ))
       )}

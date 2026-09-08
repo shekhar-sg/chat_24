@@ -1,32 +1,69 @@
 "use client";
-import ChatToolbar from "@/components/ChatToolbar";
-import { users as allUsers } from "@/content/users";
-import { Box, Divider, Stack } from "@mui/material";
+
+import { skipToken } from "@reduxjs/toolkit/query";
+import {
+  Box,
+  CircularProgress,
+  Divider,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { useState } from "react";
-import MessageInput from "./MessageInput";
-import MessageList from "./MessageList";
+
+import ChatToolbar from "@/components/ChatToolbar";
+import MessageInput from "@/components/MessageInput";
+import MessageList from "@/components/MessageList";
+import { sendMessage } from "@/lib/firestore/conversations";
+import { useGetConversationsQuery } from "@/store/api/conversationsApi";
+import { useGetMessagesQuery } from "@/store/api/messagesApi";
+import { useAppSelector } from "@/store/hooks";
 
 interface ConversationProps {
-  userID: string;
+  conversationId: string;
 }
 
-const Conversation = ({ userID }: ConversationProps) => {
-  const selectedUser = allUsers.find((u) => u.id === userID)!;
-  const [chatMessages, setChatMessages] = useState(
-    selectedUser.conversation ? [...selectedUser.conversation] : []
-  );
+const Conversation = ({ conversationId }: ConversationProps) => {
+  const currentUserId = useAppSelector((state) => state.auth.user?.uid);
 
-  const handleSendMessage = (msg: string) => {
-    const newMsg = {
-      from: "Me",
-      message: msg,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-    setChatMessages((prev) => [...prev, newMsg]);
+  const [sending, setSending] = useState(false);
+
+  const {
+    data: conversations = [],
+    isLoading: conversationsLoading,
+    isError: conversationsError,
+  } = useGetConversationsQuery(currentUserId ?? skipToken);
+
+  const {
+    data: messages = [],
+    isLoading: messagesLoading,
+    isError: messagesError,
+  } = useGetMessagesQuery(conversationId);
+
+  const conversation = conversations.find((item) => item.id === conversationId);
+
+  if (!currentUserId) {
+    return null;
+  }
+
+  const handleSend = async (message: string) => {
+    if (sending) {
+      return;
+    }
+
+    setSending(true);
+
+    try {
+      await sendMessage(conversationId, currentUserId, message);
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    } finally {
+      setSending(false);
+    }
   };
+
+  const loading = conversationsLoading || messagesLoading;
+
+  const error = conversationsError || messagesError;
 
   return (
     <Box
@@ -37,7 +74,7 @@ const Conversation = ({ userID }: ConversationProps) => {
         bgcolor: "background.default",
       }}
     >
-      <ChatToolbar userName={selectedUser.name} />
+      <ChatToolbar userName={"Conversation"} />
       <Divider />
       <Stack
         flexGrow={1}
@@ -50,8 +87,34 @@ const Conversation = ({ userID }: ConversationProps) => {
           overflow: "hidden",
         }}
       >
-        <MessageList messages={chatMessages} />
-        <MessageInput onSend={handleSendMessage} />
+        {loading ? (
+          <Stack flexGrow={1} alignItems="center" justifyContent="center">
+            <CircularProgress size={28} />
+          </Stack>
+        ) : error ? (
+          <Stack
+            flexGrow={1}
+            alignItems="center"
+            justifyContent="center"
+            spacing={1}
+          >
+            <Typography color="error">Failed to load conversation.</Typography>
+
+            <Typography variant="body2" color="text.secondary">
+              Please try again.
+            </Typography>
+          </Stack>
+        ) : !conversation ? (
+          <Stack flexGrow={1} alignItems="center" justifyContent="center">
+            <Typography color="text.secondary">
+              Conversation not found.
+            </Typography>
+          </Stack>
+        ) : (
+          <MessageList messages={messages} currentUserId={currentUserId} />
+        )}
+
+        <MessageInput onSend={handleSend} />
       </Stack>
     </Box>
   );

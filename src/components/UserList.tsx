@@ -29,7 +29,7 @@ export interface User {
   avatarUrl?: string;
   status?: string; // e.g. 'online', 'offline', 'typing...'
   isGroup?: boolean;
-  groupMembers: string[]; // for group chats
+  groupMembers?: string[]; // for group chats
   unreadCount?: number;
   conversation?: { from: string; message: string; time: string }[]; // optional, for conversation history
 }
