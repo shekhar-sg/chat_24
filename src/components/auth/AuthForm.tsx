@@ -80,7 +80,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
       const idToken = await credential.user.getIdToken();
 
-      const response = await fetch("/api/auth/session", {
+      const sessionResponse = await fetch("/api/auth/session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -91,13 +91,32 @@ export default function AuthForm({ mode }: AuthFormProps) {
         }),
       });
 
-      if (!response.ok) {
+      if (!sessionResponse.ok) {
         throw new Error("Failed to create server session.");
+      }
+
+      if (mode === "signup") {
+        const profileResponse = await fetch("/api/users", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            displayName: email.trim().split("@")[0],
+            email: credential.user.email,
+            photoURL: credential.user.photoURL,
+            status: null,
+          }),
+        });
+
+        if (!profileResponse.ok) {
+          throw new Error("Failed to create user profile.");
+        }
       }
 
       router.replace("/");
     } catch (err) {
-      console.log({err})
+      console.error("Authentication error:", err);
       setError(
         mode === "login"
           ? "Unable to sign in. Please check your email and password."

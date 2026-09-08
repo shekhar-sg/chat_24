@@ -2,9 +2,10 @@
 
 import AISectionTabs from "@/components/AISectionTabs";
 import PaperForAISection from "@/components/PaperForAISection";
-import UserList from "@/components/UserList";
-import { users } from "@/content/users";
-import { useAppDispatch } from "@/store/hooks";
+import UserList, { type User } from "@/components/UserList";
+import { useConversationUsers } from "@/hooks/useConversationUsers";
+import { useConversations } from "@/hooks/useConversations";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
 import {
   Paper,
@@ -14,20 +15,76 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 
 export default function ChatLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+
   const isConversationPage = pathname.startsWith("/conversation/");
   const isBelowMd = useMediaQuery((theme) => theme.breakpoints.down("md"));
   const isBelowLg = useMediaQuery((theme) => theme.breakpoints.down("lg"));
+
   const dispatch = useAppDispatch();
+  const authUser = useAppSelector((state) => state.auth.user);
+
+  const { conversations } = useConversations(authUser?.uid);
+
+  const { usersById } = useConversationUsers(conversations, authUser?.uid);
+
+  const users = useMemo<User[]>(() => {
+    return conversations.flatMap((conversation) => {
+      const otherUserId = conversation.participantIds.find(
+        (uid) => uid !== authUser?.uid
+      );
+
+      if (!otherUserId) {
+        return [];
+      }
+
+      const profile = usersById.get(otherUserId);
+
+      if (!profile) {
+        return [];
+      }
+
+      const lastMessage = conversation.lastMessage;
+
+      return [
+        {
+          id: otherUserId,
+          conversationId: conversation.id,
+          name: profile.displayName || profile.email || "Unknown user",
+          avatarUrl: profile.photoURL || undefined,
+          status: profile.status || undefined,
+          isGroup: false,
+          unreadCount: 0,
+          conversation: lastMessage
+            ? [
+                {
+                  from: lastMessage.senderId,
+                  message: lastMessage.text,
+                  time: conversation.lastMessageAt
+                    ? conversation.lastMessageAt
+                        .toDate()
+                        .toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                    : "",
+                },
+              ]
+            : [],
+        },
+      ] as User[];
+    });
+  }, [authUser?.uid, conversations, usersById]);
+
   useEffect(() => {
     if (isBelowLg) {
-      console.log("Mobile view detected, toggling AI chat sidebar.");
       dispatch(toggleAIChatSidebar(false));
     }
   }, [dispatch, isBelowLg]);
+
   return (
     <Stack
       direction={"row"}

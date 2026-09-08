@@ -24,11 +24,12 @@ import LogoutButton from "@/components/auth/LogoutButton";
 
 export interface User {
   id: string;
+  conversationId?: string;
   name: string;
   avatarUrl?: string;
   status?: string; // e.g. 'online', 'offline', 'typing...'
   isGroup?: boolean;
-  groupMembers?: string[]; // for group chats
+  groupMembers: string[]; // for group chats
   unreadCount?: number;
   conversation?: { from: string; message: string; time: string }[]; // optional, for conversation history
 }
@@ -179,7 +180,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
               <ListItem key={user.id} alignItems="flex-start">
                 <ListItemButton
                   component={Link}
-                  href={`/conversation/${user.id}`}
+                  href={`/conversation/${user.conversationId ?? user.id}`}
                   selected={
                     params?.userID === user.id || selectedUserId === user.id
                   }
