@@ -59,14 +59,45 @@ export default function AuthForm({ mode }: AuthFormProps) {
     setLoading(true);
 
     try {
-      if (mode === "login") {
-        await signInWithEmail(email.trim(), password);
-      } else {
-        await signUpWithEmail(email.trim(), password);
+      const credential =
+        mode === "login"
+          ? await signInWithEmail(email.trim(), password)
+          : await signUpWithEmail(email.trim(), password);
+
+      const csrfResponse = await fetch("/api/auth/csrf", {
+        credentials: "same-origin",
+      });
+
+      if (!csrfResponse.ok) {
+        throw new Error("Failed to initialize secure authentication.");
+      }
+
+      const { csrfToken } = await csrfResponse.json();
+
+      if (typeof csrfToken !== "string") {
+        throw new Error("Failed to initialize secure authentication.");
+      }
+
+      const idToken = await credential.user.getIdToken();
+
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken,
+          csrfToken,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create server session.");
       }
 
       router.replace("/");
-    } catch {
+    } catch (err) {
+      console.log({err})
       setError(
         mode === "login"
           ? "Unable to sign in. Please check your email and password."

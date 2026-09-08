@@ -20,6 +20,7 @@ import {
 import { type ChangeEvent, type MouseEvent, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import LogoutButton from "@/components/auth/LogoutButton";
 
 export interface User {
   id: string;
@@ -366,7 +367,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       {/* Toggle buttons at bottom left */}
       <Box
         display="flex"
-        justifyContent="flex-start"
+        justifyContent="space-between"
         alignItems="center"
         px={2}
         py={1}
@@ -385,6 +386,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
             <ViewList fontSize="small" />
           </ToggleButton>
         </ToggleButtonGroup>
+        <LogoutButton variant={"button"}/>
       </Box>
     </Box>
   );
