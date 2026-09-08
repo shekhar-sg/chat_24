@@ -17,7 +17,7 @@ const RootLayout = async ({
   const cookie = await cookies();
   const cookieThemeMode = cookie.get("themeMode")?.value;
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <StoreProvider
         cookieThemeMode={cookieThemeMode as "dark" | "light" | undefined}
       >

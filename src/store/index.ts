@@ -1,10 +1,12 @@
 import appConfigSlice from "@/store/slices/appConfigSlice";
 import { configureStore } from "@reduxjs/toolkit";
+import authSlice from "@/store/slices/authSlice";
 
 export const makeStore = () => {
   return configureStore({
     reducer: {
       [appConfigSlice.name]: appConfigSlice.reducer,
+      [authSlice.name]: authSlice.reducer,
     },
   });
 };
