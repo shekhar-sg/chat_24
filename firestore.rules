@@ -21,7 +21,15 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow read: if isSignedIn()
+      allow get: if isSignedIn()
+      && (
+        !exists(
+          /databases/$(database)/documents/conversations/$(conversationId)
+        )
+        || request.auth.uid in resource.data.participantIds
+      );
+
+      allow list: if isSignedIn()
       && request.auth.uid in resource.data.participantIds;
 
       allow create: if isSignedIn()

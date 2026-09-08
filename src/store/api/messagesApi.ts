@@ -10,6 +10,7 @@ import {
 import { baseApi } from "./baseApi";
 import { db } from "@/lib/firestore";
 import type { FirestoreMessage } from "@/types/firestore";
+import { timestampToMillis } from "@/utils/helpers";
 
 const MESSAGE_LIMIT = 100;
 
@@ -47,10 +48,19 @@ export const messagesApi = baseApi.injectEndpoints({
           unsubscribe = onSnapshot(
             messagesQuery,
             (snapshot) => {
-              const messages = snapshot.docs.map((messageDoc) => ({
-                id: messageDoc.id,
-                ...(messageDoc.data() as FirestoreMessage),
-              }));
+              const messages: MessageWithId[] = snapshot.docs.map(
+                (messageDoc) => {
+                  const data = messageDoc.data();
+
+                  return {
+                    id: messageDoc.id,
+                    senderId: data.senderId,
+                    text: data.text,
+                    type: data.type,
+                    createdAt: timestampToMillis(data.createdAt),
+                  };
+                }
+              );
 
               updateCachedData((draft) => {
                 draft.length = 0;

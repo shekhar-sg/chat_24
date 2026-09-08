@@ -3,12 +3,12 @@ import { use } from "react";
 
 const ConversationPage = (props: {
   params: Promise<{
-    userID: string;
+    conversationId: string;
   }>;
 }) => {
   const params = use(props.params);
 
-  return <Conversation userID={params.userID} />;
+  return <Conversation conversationId={params.conversationId} />;
 };
 
 export default ConversationPage;

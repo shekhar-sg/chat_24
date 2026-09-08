@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import { skipToken } from "@reduxjs/toolkit/query";
 import { usePathname } from "next/navigation";
-import {type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import AISectionTabs from "@/components/AISectionTabs";
 import NewConversation from "@/components/NewConversation";
@@ -22,11 +22,7 @@ import { useGetUsersByIdsQuery } from "@/store/api/usersApi";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
 
-export default function ChatLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function ChatLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const isConversationPage = pathname.startsWith("/conversation/");
@@ -100,12 +96,13 @@ export default function ChatLayout({
                   from: lastMessage.senderId,
                   message: lastMessage.text,
                   time: conversation.lastMessageAt
-                    ? conversation.lastMessageAt
-                        .toDate()
-                        .toLocaleTimeString([], {
+                    ? new Date(conversation.lastMessageAt).toLocaleTimeString(
+                        [],
+                        {
                           hour: "2-digit",
                           minute: "2-digit",
-                        })
+                        }
+                      )
                     : "",
                 },
               ]

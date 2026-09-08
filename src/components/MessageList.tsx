@@ -18,7 +18,7 @@ const formatMessageTime = (createdAt: FirestoreMessage["createdAt"]) => {
     return "";
   }
 
-  return createdAt.toDate().toLocaleTimeString([], {
+  return new Date(createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });

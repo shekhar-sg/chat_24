@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/firestore";
 import { baseApi } from "./baseApi";
 import type { FirestoreConversation } from "@/types/firestore";
+import { timestampToMillis } from "@/utils/helpers";
 
 const CONVERSATION_LIMIT = 30;
 
@@ -35,10 +36,29 @@ export const conversationsApi = baseApi.injectEndpoints({
           unsubscribe = onSnapshot(
             conversationsQuery,
             (snapshot) => {
-              const conversations = snapshot.docs.map((conversationDoc) => ({
-                id: conversationDoc.id,
-                ...conversationDoc.data(),
-              })) as FirestoreConversation[];
+              const conversations: FirestoreConversation[] = snapshot.docs.map(
+                (conversationDoc) => {
+                  const data = conversationDoc.data();
+                  const lastMessage = data.lastMessage;
+
+                  return {
+                    id: conversationDoc.id,
+                    type: data.type,
+                    participantIds: data.participantIds,
+                    lastMessage: lastMessage
+                      ? {
+                          text: lastMessage.text,
+                          senderId: lastMessage.senderId,
+                          createdAt:
+                            timestampToMillis(lastMessage.createdAt) ??
+                            Date.now(),
+                        }
+                      : null,
+                    lastMessageAt: timestampToMillis(data.lastMessageAt),
+                    createdAt: timestampToMillis(data.createdAt) ?? Date.now(),
+                  };
+                }
+              );
 
               updateCachedData((draft) => {
                 draft.length = 0;

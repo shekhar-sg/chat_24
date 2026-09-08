@@ -1,5 +1,3 @@
-import type { Timestamp } from "firebase/firestore";
-
 export interface FirestoreUser {
   displayName: string | null;
   email: string | null;
@@ -10,7 +8,7 @@ export interface FirestoreUser {
 export interface LastMessage {
   text: string;
   senderId: string;
-  createdAt: Timestamp;
+  createdAt: number;
 }
 
 export interface FirestoreConversation {
@@ -18,13 +16,13 @@ export interface FirestoreConversation {
   type: "direct";
   participantIds: string[];
   lastMessage: LastMessage | null;
-  lastMessageAt: Timestamp | null;
-  createdAt: Timestamp;
+  lastMessageAt: number | null;
+  createdAt: number;
 }
 
 export interface FirestoreMessage {
   senderId: string;
   text: string;
   type: "text";
-  createdAt: Timestamp;
+  createdAt: number;
 }
