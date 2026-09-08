@@ -1,10 +1,3 @@
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  toggleAIChatSidebar,
-  toggleThemeMode,
-} from "@/store/slices/appConfigSlice";
-import { gradientForAI } from "@/styles/theme";
-import { sxToArray } from "@/utils/helpers";
 import {
   AutoFixHigh,
   Brightness4,
@@ -13,30 +6,46 @@ import {
 } from "@mui/icons-material";
 import {
   AppBar,
+  Avatar,
+  Box,
   type AppBarProps,
   Chip,
   IconButton,
   Toolbar,
   Typography,
 } from "@mui/material";
-
 import Link from "next/link";
-import React from "react";
+
+import { stringToColor } from "@/components/UserList";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  toggleAIChatSidebar,
+  toggleThemeMode,
+} from "@/store/slices/appConfigSlice";
+import { gradientForAI } from "@/styles/theme";
+import { sxToArray } from "@/utils/helpers";
+import type { UserWithId } from "@/store/api/usersApi";
 
 interface ChatToolbarProps extends AppBarProps {
-  userName: string;
+  user: UserWithId;
 }
 
 function ChatToolbar(props: ChatToolbarProps) {
-  const { userName, ...rest } = props;
+  const { user, ...rest } = props;
+
   const isAIChatSidebarOpen = useAppSelector(
     ({ appConfig }) => appConfig.isAIChatSidebarOpen
   );
-  const dispatch = useAppDispatch(); // Replace with actual state if needed
+
+  const dispatch = useAppDispatch();
+
+  const displayName = user.displayName || user.email || "Unknown user";
+  const avatarColor = stringToColor(user.displayName || displayName);
+
   return (
     <AppBar
-      position={"sticky"}
-      color={"default"}
+      position="sticky"
+      color="default"
       elevation={0}
       {...rest}
       sx={[
@@ -47,11 +56,46 @@ function ChatToolbar(props: ChatToolbarProps) {
       ]}
     >
       <Toolbar sx={{ gap: 1.5 }}>
-        <Typography variant="h6" noWrap sx={{ flexGrow: 1 }} component="div">
-          {userName}
-        </Typography>
-        <IconButton color="inherit" aria-label="menu" size={"small"}>
-          <MoreHoriz fontSize={"small"} />
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <Avatar
+            src={user.photoURL || undefined}
+            alt={displayName}
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: avatarColor,
+              color: (theme) => theme.palette.getContrastText(avatarColor),
+              fontWeight: 600,
+              fontSize: 18,
+            }}
+          >
+            {displayName.charAt(0).toUpperCase()}
+          </Avatar>
+
+          <Typography
+            variant={"h6"}
+            noWrap
+            component={"div"}
+            sx={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {displayName}
+          </Typography>
+        </Box>
+
+        <IconButton color="inherit" aria-label="conversation menu" size="small">
+          <MoreHoriz fontSize="small" />
         </IconButton>
         <IconButton
           color="inherit"
@@ -70,7 +114,7 @@ function ChatToolbar(props: ChatToolbarProps) {
         <Chip
           component={Link}
           href={"/"}
-          disabled={!userName}
+          disabled={!user.displayName}
           sx={{
             bgcolor: "primary.main",
             padding: 0.8,

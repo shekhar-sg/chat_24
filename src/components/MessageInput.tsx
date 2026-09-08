@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Bolt,
   Bookmarks,
@@ -31,10 +33,11 @@ import {
 } from "react";
 
 interface MessageInputProps {
-  onSend: (msg: string) => void;
+  onSend: (msg: string) => Promise<void>;
+  disabled?: boolean;
 }
 
-const MessageInput = ({ onSend }: MessageInputProps) => {
+const MessageInput = ({ onSend, disabled = false }: MessageInputProps) => {
   const [message, setMessage] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -56,17 +59,27 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
 
   const open = Boolean(emojiAnchorEl);
 
-  const handleSend = () => {
-    if (!message.trim() && files.length === 0) return;
-    onSend(message.trim());
-    setMessage("");
-    setFiles([]);
-    inputRef.current?.focus();
+  const handleSend = async () => {
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage || disabled) {
+      return;
+    }
+
+    try {
+      await onSend(trimmedMessage);
+      setMessage("");
+      setFiles([]);
+      inputRef.current?.focus();
+    } catch {
+      // Keep the message in the input so the user can retry.
+    }
   };
+
   const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
   const handleClick = (event: MouseEvent<HTMLButtonElement>) =>
@@ -164,7 +177,8 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
             <IconButton
               color={"primary"}
               onClick={handleAttachClick}
-              size={"small"}
+              disabled={disabled}
+              size="small"
             >
               <AttachFileIcon fontSize={"small"} />
             </IconButton>
@@ -182,7 +196,7 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
             arrow
             slots={{ transition: Zoom }}
           >
-            <IconButton color={"primary"} size={"small"}>
+            <IconButton color="primary" disabled={disabled} size="small">
               <Bookmarks fontSize={"small"} />
             </IconButton>
           </Tooltip>
@@ -193,24 +207,32 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
             arrow
             slots={{ transition: Zoom }}
           >
-            <IconButton color={"primary"} size={"small"}>
-              <Bolt fontSize={"small"} />
+            <IconButton color="primary" disabled={disabled} size="small">
+              <Bolt fontSize="small" />
             </IconButton>
           </Tooltip>
           <Box flex={1} />
           <ButtonGroup
             variant="contained"
-            disabled={!message.trim() && files.length === 0}
+            disabled={disabled || !message.trim()}
             disableElevation
           >
-            <Button onClick={handleSend}>Send</Button>
             <Button
-              size={"small"}
-              id={"basic-button"}
+              onClick={() => {
+                void handleSend();
+              }}
+            >
+              {disabled ? "Sending..." : "Send"}
+            </Button>
+
+            <Button
+              size="small"
+              id="basic-button"
               aria-controls={openMenu ? "basic-menu" : undefined}
               aria-haspopup="true"
               aria-expanded={openMenu ? "true" : undefined}
               onClick={handleClick}
+              disabled={disabled}
               sx={{
                 minWidth: "0px !important",
                 px: 1,
@@ -235,7 +257,7 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
           <Stack direction="row" gap={1} mt={1} flexWrap="wrap">
             {files.map((file, idx) => (
               <Box
-                key={idx}
+                key={`${file.name}-${idx}`}
                 sx={{
                   bgcolor: "#f7f8fa",
                   px: 2,
@@ -251,6 +273,7 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
                   size="small"
                   color="error"
                   onClick={() => handleRemoveFile(idx)}
+                  disabled={disabled}
                   sx={{ minWidth: 0, px: 1 }}
                 >
                   x

@@ -8,6 +8,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+
 import { useState } from "react";
 
 import ChatToolbar from "@/components/ChatToolbar";
@@ -16,6 +17,7 @@ import MessageList from "@/components/MessageList";
 import { sendMessage } from "@/lib/firestore/conversations";
 import { useGetConversationsQuery } from "@/store/api/conversationsApi";
 import { useGetMessagesQuery } from "@/store/api/messagesApi";
+import { useGetUsersByIdsQuery } from "@/store/api/usersApi";
 import { useAppSelector } from "@/store/hooks";
 
 interface ConversationProps {
@@ -41,6 +43,21 @@ const Conversation = ({ conversationId }: ConversationProps) => {
 
   const conversation = conversations.find((item) => item.id === conversationId);
 
+  const otherUserId = conversation?.participantIds.find(
+    (uid) => uid !== currentUserId
+  );
+
+  const { data: participantUsers = [], isLoading: participantLoading } =
+    useGetUsersByIdsQuery(otherUserId ?? "", {
+      skip: !otherUserId,
+    });
+
+  const otherUser = participantUsers[0];
+
+  const loading = conversationsLoading || messagesLoading || participantLoading;
+
+  const error = conversationsError || messagesError;
+
   if (!currentUserId) {
     return null;
   }
@@ -61,10 +78,6 @@ const Conversation = ({ conversationId }: ConversationProps) => {
     }
   };
 
-  const loading = conversationsLoading || messagesLoading;
-
-  const error = conversationsError || messagesError;
-
   return (
     <Box
       sx={{
@@ -74,8 +87,22 @@ const Conversation = ({ conversationId }: ConversationProps) => {
         bgcolor: "background.default",
       }}
     >
-      <ChatToolbar userName={"Conversation"} />
+      {otherUser ? (
+        <ChatToolbar user={otherUser} />
+      ) : (
+        <ChatToolbar
+          user={{
+            id: "",
+            displayName: "Conversation",
+            email: null,
+            photoURL: null,
+            status: null,
+          }}
+        />
+      )}
+
       <Divider />
+
       <Stack
         flexGrow={1}
         p={2}
