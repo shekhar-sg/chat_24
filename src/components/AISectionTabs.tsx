@@ -10,7 +10,11 @@ import type { SxProps } from "@mui/system";
 import { type SyntheticEvent, useState } from "react";
 import AIDetailsSection from "./AIDetailsSection";
 
-const AISectionTabs = () => {
+interface AISectionTabsProps {
+  conversationId: string | null;
+}
+
+const AISectionTabs = ({ conversationId }: AISectionTabsProps) => {
   const [value, setValue] = useState("2");
   const dispatch = useAppDispatch();
 
@@ -83,7 +87,7 @@ const AISectionTabs = () => {
         <AIDetailsSection />
       </TabPanel>
       <TabPanel value="2" sx={tabPanelSx}>
-        <AICopilotSection />
+        <AICopilotSection conversationId={conversationId} />
       </TabPanel>
     </TabContext>
   );

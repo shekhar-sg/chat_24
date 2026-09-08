@@ -12,18 +12,28 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { useGetUsersQuery } from "@/store/api/userApi";
+import { getDirectConversationId } from "@/firebase/chat";
 
 export default function ChatLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isConversationPage = pathname.startsWith("/conversation/");
   const isBelowMd = useMediaQuery((theme) => theme.breakpoints.down("md"));
   const isBelowLg = useMediaQuery((theme) => theme.breakpoints.down("lg"));
+  const params = useParams<{ conversationId: string }>();
   const dispatch = useAppDispatch();
-
   const currentUser = useAppSelector((state) => state.auth.user);
+
+  const conversationUserId =
+    isConversationPage && typeof params.conversationId === "string"
+      ? params.conversationId
+      : null;
+  const conversationId =
+    currentUser?.uid && conversationUserId
+      ? getDirectConversationId(currentUser.uid, conversationUserId)
+      : null;
 
   const {
     data: users = [],
@@ -111,7 +121,7 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
           boxShadow: "inset 0 0 8px rgba(0,0,0,0.1)",
         }}
       >
-        <AISectionTabs />
+        <AISectionTabs conversationId={conversationId} />{" "}
       </PaperForAISection>
     </Stack>
   );

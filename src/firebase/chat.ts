@@ -18,7 +18,7 @@ import {
 import { db } from "./config";
 import { Message } from "@/types/chat";
 
-const getDirectConversationId = (userId1: string, userId2: string) =>
+export const getDirectConversationId = (userId1: string, userId2: string) =>
   [userId1, userId2].sort().join("_");
 
 export const getOrCreateDirectConversation = async (

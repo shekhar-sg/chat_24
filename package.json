@@ -1,5 +1,5 @@
 {
-  "name": "beyond-chats-assignment",
+  "name": "chat-24",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -28,14 +28,11 @@
     "react-redux": "^9.2.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "3.3.1",
+    "@biomejs/biome": "2.5.12",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "20.6.0",
     "@types/react": "19.0.12",
     "@types/react-dom": "19.0.4",
-    "eslint": "9.27.0",
-    "eslint-config-next": "15.3.2",
-    "prettier": "3.5.3",
     "typescript": "5.8.3"
   }
 }
