@@ -16,7 +16,7 @@ import {
   Tooltip,
 } from "@mui/material";
 
-import { signOutUser } from "@/lib/auth";
+import { signOutUser } from "@/lib/firebase/auth";
 import { useRouter } from "next/navigation";
 
 interface LogoutButtonProps {

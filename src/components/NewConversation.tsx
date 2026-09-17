@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { useDebounce } from "@/hooks/useDebounce";
-import { getOrCreateDirectConversation } from "@/lib/firestore/conversations";
+import { getOrCreateDirectConversation } from "@/lib/firebase/firestore/conversations";
 import { useGetUsersQuery } from "@/store/api/usersApi";
 import { useAppSelector } from "@/store/hooks";
 

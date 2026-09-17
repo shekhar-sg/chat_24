@@ -6,7 +6,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-import { db } from "@/lib/firestore";
+import { db } from "@/lib/firebase/firestore";
 
 export async function sendMessage({
   conversationId,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { adminAuth } from "@/lib/firebase-admin";
+import { adminAuth } from "@/lib/firebase/firebase-admin";
 
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 5;
 const RECENT_SIGN_IN_WINDOW_SECONDS = 5 * 60;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { adminDb } from "@/lib/firebase-admin";
-import { verifySessionCookie } from "@/lib/auth-server";
+import { adminDb } from "@/lib/firebase/firebase-admin";
+import { verifySessionCookie } from "@/lib/firebase/auth-server";
 
 export async function POST(request: Request) {
   try {

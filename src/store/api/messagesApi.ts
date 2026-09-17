@@ -8,15 +8,11 @@ import {
 } from "firebase/firestore";
 
 import { baseApi } from "./baseApi";
-import { db } from "@/lib/firestore";
-import type { FirestoreMessage } from "@/types/firestore";
+import { db } from "@/lib/firebase/firestore";
+import type { MessageWithId } from "@/types/firestore";
 import { timestampToMillis } from "@/utils/helpers";
 
 const MESSAGE_LIMIT = 100;
-
-export interface MessageWithId extends FirestoreMessage {
-  id: string;
-}
 
 export const messagesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -55,8 +51,12 @@ export const messagesApi = baseApi.injectEndpoints({
                   return {
                     id: messageDoc.id,
                     senderId: data.senderId,
-                    text: data.text,
                     type: data.type,
+                    text: data.text,
+                    fileName: data.fileName,
+                    fileUrl: data.fileUrl,
+                    fileSize: data.fileSize,
+                    contentType: data.contentType,
                     createdAt: timestampToMillis(data.createdAt),
                   };
                 }

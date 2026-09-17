@@ -8,7 +8,7 @@ import {
   type FirestoreError,
 } from "firebase/firestore";
 
-import { db } from "@/lib/firestore";
+import { db } from "@/lib/firebase/firestore";
 import { baseApi } from "./baseApi";
 import type { FirestoreConversation } from "@/types/firestore";
 import { timestampToMillis } from "@/utils/helpers";

@@ -8,7 +8,7 @@ import {
   where,
 } from "firebase/firestore";
 
-import { db } from "@/lib/firestore";
+import { db } from "@/lib/firebase/firestore";
 import type { FirestoreUser } from "@/types/firestore";
 import { baseApi } from "./baseApi";
 

@@ -1,5 +1,5 @@
 import ChatLayout from "@/app/(chat)/ChatLayout";
-import { getCurrentUser } from "@/lib/get-current-user";
+import { getCurrentUser } from "@/lib/firebase/get-current-user";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 

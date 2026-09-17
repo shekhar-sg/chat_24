@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
-import { signInWithEmail, signUpWithEmail } from "@/lib/auth";
+import { signInWithEmail, signUpWithEmail } from "@/lib/firebase/auth";
 import { useRouter } from "next/navigation";
 
 type AuthMode = "login" | "signup";

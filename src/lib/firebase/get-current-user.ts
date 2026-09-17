@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import { verifySessionCookie } from "@/lib/auth-server";
+import { verifySessionCookie } from "@/lib/firebase/auth-server";
 
 export async function getCurrentUser() {
   const sessionCookie = (await cookies()).get("session")?.value;

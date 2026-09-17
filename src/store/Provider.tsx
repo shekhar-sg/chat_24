@@ -5,7 +5,7 @@ import Cookies from "js-cookie";
 import { type ReactNode, useEffect, useRef } from "react";
 import { Provider } from "react-redux";
 import { AppStore, makeStore } from "./";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/firebase/auth";
 import { clearAuth, setUser } from "@/store/slices/authSlice";
 import { onAuthStateChanged } from "firebase/auth";
 

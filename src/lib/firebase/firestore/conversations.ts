@@ -13,7 +13,7 @@ import {
   FirestoreError,
 } from "firebase/firestore";
 
-import { db } from "@/lib/firestore";
+import { db } from "@/lib/firebase/firestore";
 import type { FirestoreConversation } from "@/types/firestore";
 
 const CONVERSATION_LIMIT = 30;
@@ -55,7 +55,7 @@ export async function getOrCreateDirectConversation(
   return conversationId;
 }
 
-export async function sendMessage(
+export async function sendTextMessage(
   conversationId: string,
   senderId: string,
   text: string
@@ -85,6 +85,68 @@ export async function sendMessage(
     lastMessage: {
       text: trimmedText,
       senderId,
+      type: "text",
+      createdAt: serverTimestamp(),
+    },
+    lastMessageAt: serverTimestamp(),
+  });
+
+  await batch.commit();
+
+  return messageRef.id;
+}
+
+interface SendFileMessageInput {
+  senderId: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  contentType: string;
+}
+
+export async function sendFileMessage(
+  conversationId: string,
+  input: SendFileMessageInput
+) {
+  if (!input.fileName.trim()) {
+    throw new Error("File name is required.");
+  }
+
+  if (!input.fileUrl) {
+    throw new Error("File URL is required.");
+  }
+
+  if (input.fileSize <= 0) {
+    throw new Error("Invalid file size.");
+  }
+
+  if (!input.contentType) {
+    throw new Error("File type is required.");
+  }
+
+  const conversationRef = getConversationRef(conversationId);
+
+  const messageRef = doc(
+    collection(db, "conversations", conversationId, "messages")
+  );
+
+  const batch = writeBatch(db);
+
+  batch.set(messageRef, {
+    senderId: input.senderId,
+    type: "file",
+    fileName: input.fileName,
+    fileUrl: input.fileUrl,
+    fileSize: input.fileSize,
+    contentType: input.contentType,
+    createdAt: serverTimestamp(),
+  });
+
+  batch.update(conversationRef, {
+    lastMessage: {
+      type: "file",
+      fileName: input.fileName,
+      senderId: input.senderId,
       createdAt: serverTimestamp(),
     },
     lastMessageAt: serverTimestamp(),

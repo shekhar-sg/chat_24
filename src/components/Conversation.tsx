@@ -14,7 +14,10 @@ import { useState } from "react";
 import ChatToolbar from "@/components/ChatToolbar";
 import MessageInput from "@/components/MessageInput";
 import MessageList from "@/components/MessageList";
-import { sendMessage } from "@/lib/firestore/conversations";
+import {
+  sendFileMessage,
+  sendTextMessage,
+} from "@/lib/firebase/firestore/conversations";
 import { useGetConversationsQuery } from "@/store/api/conversationsApi";
 import { useGetMessagesQuery } from "@/store/api/messagesApi";
 import { useGetUsersByIdsQuery } from "@/store/api/usersApi";
@@ -22,6 +25,13 @@ import { useAppSelector } from "@/store/hooks";
 
 interface ConversationProps {
   conversationId: string;
+}
+
+export interface FileMessagePayload {
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  contentType: string;
 }
 
 const Conversation = ({ conversationId }: ConversationProps) => {
@@ -62,22 +72,32 @@ const Conversation = ({ conversationId }: ConversationProps) => {
     return null;
   }
 
-  const handleSend = async (message: string) => {
-    if (sending) {
-      return;
-    }
+  const handleSend = async (message: string, file?: FileMessagePayload) => {
+    if (sending) return;
 
     setSending(true);
 
     try {
-      await sendMessage(conversationId, currentUserId, message);
+      if (file) {
+        await sendFileMessage(conversationId, {
+          senderId: currentUserId,
+          fileName: file.fileName,
+          fileUrl: file.fileUrl,
+          fileSize: file.fileSize,
+          contentType: file.contentType,
+        });
+
+        return;
+      }
+
+      await sendTextMessage(conversationId, currentUserId, message);
     } catch (error) {
       console.error("Failed to send message:", error);
+      throw error;
     } finally {
       setSending(false);
     }
   };
-
   return (
     <Box
       sx={{
