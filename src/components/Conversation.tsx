@@ -9,12 +9,13 @@ import {
   Typography,
 } from "@mui/material";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import ChatToolbar from "@/components/ChatToolbar";
 import MessageInput from "@/components/MessageInput";
 import MessageList from "@/components/MessageList";
 import {
+  markConversationAsRead,
   sendFileMessage,
   sendTextMessage,
 } from "@/lib/firebase/firestore/conversations";
@@ -67,6 +68,30 @@ const Conversation = ({ conversationId }: ConversationProps) => {
   const loading = conversationsLoading || messagesLoading || participantLoading;
 
   const error = conversationsError || messagesError;
+
+  useEffect(() => {
+    if (!currentUserId || !conversation) {
+      return;
+    }
+
+    const latestMessage = messages[messages.length - 1];
+
+    if (!latestMessage) {
+      return;
+    }
+
+    // Only mark the conversation as read when the latest message
+    // was sent by the other participant.
+    if (latestMessage.senderId === currentUserId) {
+      return;
+    }
+
+    void markConversationAsRead(conversationId, currentUserId).catch(
+      (error) => {
+        console.error("Failed to mark conversation as read:", error);
+      }
+    );
+  }, [conversationId, currentUserId, conversation, messages]);
 
   if (!currentUserId) {
     return null;
@@ -158,7 +183,7 @@ const Conversation = ({ conversationId }: ConversationProps) => {
             </Typography>
           </Stack>
         ) : (
-          <MessageList messages={messages} currentUserId={currentUserId} />
+          <MessageList messages={messages} currentUserId={currentUserId} readAt={conversation.readAt}/>
         )}
 
         <MessageInput onSend={handleSend} />

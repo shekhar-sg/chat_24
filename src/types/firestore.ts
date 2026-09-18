@@ -44,5 +44,6 @@ export interface FirestoreConversation {
   participantIds: string[];
   lastMessage: LastMessage | null;
   lastMessageAt: number | null;
+  readAt: Record<string, number | null>;
   createdAt: number;
 }

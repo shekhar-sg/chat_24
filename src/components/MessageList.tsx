@@ -13,6 +13,7 @@ type Message = FirestoreMessage & {
 interface MessageListProps {
   messages: Message[];
   currentUserId: string;
+  readAt?: Record<string, number | null>;
 }
 
 const getMessageDate = (createdAt: FirestoreMessage["createdAt"]) => {
@@ -92,7 +93,8 @@ const formatDateLabel = (createdAt: FirestoreMessage["createdAt"]) => {
   });
 };
 
-const MessageList = ({ messages, currentUserId }: MessageListProps) => {
+const MessageList = (props: MessageListProps) => {
+  const { messages, currentUserId, readAt } = props;
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<PreviewFile | null>(null);
@@ -118,6 +120,20 @@ const MessageList = ({ messages, currentUserId }: MessageListProps) => {
       behavior: "smooth",
     });
   }, [messages]);
+
+  const otherUserId = messages.find(
+    (message) => message.senderId !== currentUserId
+  )?.senderId;
+
+  const otherUserReadAt = otherUserId ? (readAt?.[otherUserId] ?? null) : null;
+
+  const isMessageSeen = (message: Message) => {
+    return (
+      message.senderId === currentUserId &&
+      otherUserReadAt !== null &&
+      message.createdAt <= otherUserReadAt
+    );
+  };
 
   return (
     <>
@@ -190,6 +206,7 @@ const MessageList = ({ messages, currentUserId }: MessageListProps) => {
                     <MessageBubble
                       time={formatMessageTime(message.createdAt)}
                       isMe={isMe}
+                      seen={isMessageSeen(message)}
                       file={{
                         fileName: message.fileName,
                         fileUrl: message.fileUrl,
@@ -203,6 +220,7 @@ const MessageList = ({ messages, currentUserId }: MessageListProps) => {
                       message={message.text}
                       time={formatMessageTime(message.createdAt)}
                       isMe={isMe}
+                      seen={isMessageSeen(message)}
                     />
                   )}
                 </Box>

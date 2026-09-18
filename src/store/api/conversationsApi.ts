@@ -6,6 +6,7 @@ import {
   query,
   where,
   type FirestoreError,
+  Timestamp,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase/firestore";
@@ -47,14 +48,29 @@ export const conversationsApi = baseApi.injectEndpoints({
                     participantIds: data.participantIds,
                     lastMessage: lastMessage
                       ? {
+                          type: lastMessage.type,
                           text: lastMessage.text,
                           senderId: lastMessage.senderId,
                           createdAt:
                             timestampToMillis(lastMessage.createdAt) ??
                             Date.now(),
+                          fileName: lastMessage.fileName,
                         }
                       : null,
+
                     lastMessageAt: timestampToMillis(data.lastMessageAt),
+
+                    readAt: Object.fromEntries(
+                      Object.entries(data.readAt ?? {}).map(
+                        ([userId, timestamp]) => [
+                          userId,
+                          timestampToMillis(
+                            timestamp as Timestamp | null | undefined
+                          ),
+                        ]
+                      )
+                    ),
+
                     createdAt: timestampToMillis(data.createdAt) ?? Date.now(),
                   };
                 }

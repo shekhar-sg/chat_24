@@ -1,7 +1,8 @@
 "use client";
 
-import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
+import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import InsertDriveFileRoundedIcon from "@mui/icons-material/InsertDriveFileRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import { Box, Typography } from "@mui/material";
 import type { PreviewFile } from "./FilePreviewDialog";
 
@@ -10,15 +11,75 @@ interface MessageBubbleProps {
   time: string;
   isMe: boolean;
   file?: PreviewFile;
+  seen?: boolean;
   onFileClick?: (file: PreviewFile) => void;
 }
 
+interface MessageMetaProps {
+  time: string;
+  isMe: boolean;
+  seen: boolean;
+  overlay?: boolean;
+}
+
+const MessageMeta = ({
+  time,
+  isMe,
+  seen,
+  overlay = false,
+}: MessageMetaProps) => {
+  if (!time) return null;
+
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 0.25,
+        flexShrink: 0,
+        px: overlay ? 0.55 : 0,
+        py: overlay ? 0.3 : 0,
+        borderRadius: overlay ? 1.25 : 0,
+        bgcolor: overlay ? "rgba(0, 0, 0, 0.46)" : "transparent",
+        backdropFilter: overlay ? "blur(5px)" : "none",
+        color: overlay
+          ? "rgba(255,255,255,0.88)"
+          : isMe
+            ? "rgba(255,255,255,0.64)"
+            : "text.secondary",
+      }}
+    >
+      <Typography
+        component="span"
+        sx={{
+          fontSize: 10,
+          lineHeight: 1.2,
+          fontWeight: 500,
+          whiteSpace: "nowrap",
+          letterSpacing: 0.05,
+        }}
+      >
+        {time}
+      </Typography>
+
+      {isMe && (
+        <DoneAllRoundedIcon
+          sx={{
+            fontSize: 14,
+            lineHeight: 1,
+            color: seen ? "info.main" : "rgba(255,255,255,0.58)",
+          }}
+        />
+      )}
+    </Box>
+  );
+};
+
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
@@ -27,23 +88,18 @@ const MessageBubble = ({
   time,
   isMe,
   file,
+  seen = false,
   onFileClick,
 }: MessageBubbleProps) => {
   const text = message.trim();
 
   const isEmoji = !file && text.length > 0 && /^\p{Emoji}+$/u.test(text);
-
   const isSingleEmoji = isEmoji && [...text].length === 1;
-
   const isImage =
     typeof file?.contentType === "string" &&
     file.contentType.startsWith("image/");
-
   const isPdf = file?.contentType === "application/pdf";
 
-  /*
-   * Emoji-only messages
-   */
   if (isEmoji) {
     return (
       <Box
@@ -51,38 +107,36 @@ const MessageBubble = ({
           display: "flex",
           justifyContent: isMe ? "flex-end" : "flex-start",
           px: { xs: 1, sm: 2 },
-          mb: 0.5,
+          mb: 0.75,
         }}
       >
         <Box
           sx={{
-            textAlign: isMe ? "right" : "left",
+            position: "relative",
+            display: "inline-flex",
+            alignItems: "flex-end",
+            maxWidth: "85%",
+            minWidth: isSingleEmoji ? 72 : 96,
+            minHeight: isSingleEmoji ? 72 : 46,
+            pb: 0.5,
           }}
         >
           <Typography
             component="div"
             sx={{
-              fontSize: isSingleEmoji ? 120 : 30,
-              lineHeight: 1.2,
+              fontSize: isSingleEmoji ? 64 : 30,
+              lineHeight: 1.15,
+              letterSpacing: isSingleEmoji ? 0 : 1,
+              px: isSingleEmoji ? 0 : 1,
+              py: isSingleEmoji ? 0 : 0.25,
             }}
           >
             {text}
           </Typography>
 
-          {time && (
-            <Typography
-              component="span"
-              sx={{
-                display: "block",
-                mt: 0.25,
-                fontSize: 10,
-                color: "text.secondary",
-                opacity: 0.55,
-              }}
-            >
-              {time}
-            </Typography>
-          )}
+          <Box sx={{ position: "absolute", right: 0, bottom: 0 }}>
+            <MessageMeta time={time} isMe={isMe} seen={seen} overlay />
+          </Box>
         </Box>
       </Box>
     );
@@ -94,41 +148,35 @@ const MessageBubble = ({
         display: "flex",
         justifyContent: isMe ? "flex-end" : "flex-start",
         px: { xs: 1, sm: 2 },
-        mb: 0.5,
+        mb: 0.65,
       }}
     >
       <Box
         sx={{
           position: "relative",
-          maxWidth: {
-            xs: "85%",
-            sm: "70%",
-          },
-
-          /*
-           * WhatsApp-like bubble shape
-           */
-          borderRadius: isMe ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
-
-          bgcolor: isMe ? "secondary.main" : "background.paper",
-
+          width: "fit-content",
+          maxWidth: { xs: "85%", sm: "70%" },
+          minWidth: 52,
+          borderRadius: isMe ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
+          bgcolor: isMe ? "success.main" : "background.paper",
           color: isMe ? "secondary.contrastText" : "text.primary",
-
-          /*
-           * Very subtle separation instead of cards/shadows
-           */
-          boxShadow: "0 1px 1px rgba(0, 0, 0, 0.08)",
-
+          border: "1px solid",
+          borderColor: isMe
+            ? "success.main"
+            : "grey.300",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
           overflow: "hidden",
         }}
       >
-        {/* IMAGE MESSAGE */}
         {file && isImage && (
           <Box
             onClick={() => onFileClick?.(file)}
             sx={{
               position: "relative",
               cursor: "pointer",
+              lineHeight: 0,
+              overflow: "hidden",
+              "&:hover img": { transform: "scale(1.01)" },
             }}
           >
             <Box
@@ -139,42 +187,20 @@ const MessageBubble = ({
               sx={{
                 display: "block",
                 width: "100%",
-                maxWidth: 380,
-                maxHeight: 420,
-                minWidth: 220,
+                maxWidth: 420,
+                maxHeight: 460,
+                minWidth: { xs: 180, sm: 220 },
                 objectFit: "cover",
+                transition: "transform 180ms ease",
               }}
             />
 
-            {/* Image footer */}
-            {time && (
-              <Box
-                sx={{
-                  position: "absolute",
-                  right: 8,
-                  bottom: 7,
-                  px: 0.75,
-                  py: 0.25,
-                  borderRadius: 4,
-                  bgcolor: "rgba(0,0,0,0.45)",
-                  color: "#fff",
-                }}
-              >
-                <Typography
-                  component="span"
-                  sx={{
-                    fontSize: 10,
-                    lineHeight: 1,
-                  }}
-                >
-                  {time}
-                </Typography>
-              </Box>
-            )}
+            <Box sx={{ position: "absolute", right: 7, bottom: 7 }}>
+              <MessageMeta time={time} isMe={isMe} seen={seen} overlay />
+            </Box>
           </Box>
         )}
 
-        {/* FILE MESSAGE */}
         {file && !isImage && (
           <Box
             onClick={() => onFileClick?.(file)}
@@ -182,10 +208,12 @@ const MessageBubble = ({
               display: "flex",
               alignItems: "center",
               gap: 1.25,
-              minWidth: 250,
+              minWidth: { xs: 230, sm: 280 },
               px: 1.25,
-              py: 1,
+              pt: 1.25,
+              pb: 0.7,
               cursor: "pointer",
+              "&:hover": { bgcolor: "rgba(255,255,255,0.035)" },
             }}
           >
             <Box
@@ -195,107 +223,67 @@ const MessageBubble = ({
                 flexShrink: 0,
                 display: "grid",
                 placeItems: "center",
-                borderRadius: 1,
-                bgcolor: isMe ? "rgba(255,255,255,0.14)" : "action.hover",
+                borderRadius: 1.5,
+                bgcolor: isMe ? "rgba(255,255,255,0.16)" : "action.hover",
               }}
             >
               {isPdf ? (
-                <PictureAsPdfRoundedIcon />
+                <PictureAsPdfRoundedIcon sx={{ fontSize: 24 }} />
               ) : (
-                <InsertDriveFileRoundedIcon />
+                <InsertDriveFileRoundedIcon sx={{ fontSize: 24 }} />
               )}
             </Box>
 
-            <Box
-              sx={{
-                minWidth: 0,
-                flex: 1,
-              }}
-            >
+            <Box sx={{ minWidth: 0, flex: 1, pr: 0.5 }}>
               <Typography
                 variant="body2"
                 noWrap
-                sx={{
-                  fontWeight: 500,
-                }}
+                title={file.fileName}
+                sx={{ fontWeight: 500, fontSize: 13.5, lineHeight: 1.35 }}
               >
                 {file.fileName}
               </Typography>
 
               <Typography
                 variant="caption"
-                sx={{
-                  opacity: 0.6,
-                }}
+                sx={{ display: "block", mt: 0.35, fontSize: 11, opacity: 0.62 }}
               >
                 {formatFileSize(file.fileSize)}
               </Typography>
             </Box>
-
-            {time && (
-              <Typography
-                component="span"
-                sx={{
-                  alignSelf: "flex-end",
-                  fontSize: 10,
-                  opacity: 0.6,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {time}
-              </Typography>
-            )}
           </Box>
         )}
 
-        {/* TEXT */}
         {text && (
-          <Typography
+          <Box sx={{ px: 1.3, pt: 0.85, pb: 0.15 }}>
+            <Typography
+              component="div"
+              sx={{
+                fontSize: 14.5,
+                lineHeight: 1.45,
+                overflowWrap: "anywhere",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {text}
+            </Typography>
+          </Box>
+        )}
+
+        {!isImage && (
+          <Box
             sx={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
               px: 1.25,
-              pt: file ? 0.25 : 0.75,
-              pb: 0.75,
-              fontSize: 14.5,
-              lineHeight: 1.45,
-              overflowWrap: "anywhere",
+              pb: 0.7,
+              pt: text ? 0.35 : 0.15,
             }}
           >
-            {text}
-
-            {/* Timestamp sits naturally beside short text */}
-            {time && (
-              <Box
-                component="span"
-                sx={{
-                  display: "inline-block",
-                  width: 52,
-                  height: 1,
-                }}
-              />
-            )}
-          </Typography>
+            <MessageMeta time={time} isMe={isMe} seen={seen} />
+          </Box>
         )}
-
-        {/* Timestamp for text */}
-        {text && time && (
-          <Typography
-            component="span"
-            sx={{
-              position: "absolute",
-              right: 7,
-              bottom: 5,
-              fontSize: 10,
-              lineHeight: 1,
-              opacity: 0.55,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {time}
-          </Typography>
-        )}
-
-        {/* Timestamp when file has no separate timestamp */}
-        {!text && file && !isImage && null}
       </Box>
     </Box>
   );

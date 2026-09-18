@@ -8,9 +8,10 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   writeBatch,
   where,
-  FirestoreError,
+  type FirestoreError,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase/firestore";
@@ -48,11 +49,26 @@ export async function getOrCreateDirectConversation(
       participantIds: [currentUserId, otherUserId],
       lastMessage: null,
       lastMessageAt: null,
+      readAt: {
+        [currentUserId]: null,
+        [otherUserId]: null,
+      },
       createdAt: serverTimestamp(),
     });
   }
 
   return conversationId;
+}
+
+export async function markConversationAsRead(
+  conversationId: string,
+  userId: string
+) {
+  const conversationRef = getConversationRef(conversationId);
+
+  await updateDoc(conversationRef, {
+    [`readAt.${userId}`]: serverTimestamp(),
+  });
 }
 
 export async function sendTextMessage(
