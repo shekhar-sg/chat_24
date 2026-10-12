@@ -23,7 +23,13 @@ import {
   Tooltip,
 } from "@mui/material";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
-import { type KeyboardEvent, type MouseEvent, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import FileUploadButton, {
   type UploadedFile,
 } from "@/components/FileUpoadButton";
@@ -31,10 +37,17 @@ import FileUploadButton, {
 interface MessageInputProps {
   onSend: (message: string, file?: UploadedFile) => Promise<void>;
   disabled?: boolean;
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
-const MessageInput = ({ onSend, disabled = false }: MessageInputProps) => {
+const MessageInput = ({
+  onSend,
+  disabled = false,
+  onTypingChange,
+}: MessageInputProps) => {
   const [message, setMessage] = useState("");
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -64,6 +77,39 @@ const MessageInput = ({ onSend, disabled = false }: MessageInputProps) => {
     inputRef.current?.focus();
   };
 
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+
+    if (!value.trim()) {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTypingChange?.(false);
+      }
+
+      return;
+    }
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      onTypingChange?.(true);
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      onTypingChange?.(false);
+      typingTimeoutRef.current = null;
+    }, 1500);
+  };
+
   const handleSend = async () => {
     const trimmedMessage = message.trim();
 
@@ -75,7 +121,22 @@ const MessageInput = ({ onSend, disabled = false }: MessageInputProps) => {
       return;
     }
 
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    onTypingChange?.(false);
+
     try {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTypingChange?.(false);
+      }
       await onSend(trimmedMessage, file ?? undefined);
 
       setMessage("");
@@ -119,7 +180,19 @@ const MessageInput = ({ onSend, disabled = false }: MessageInputProps) => {
 
   const handleClose = () => {
     setUploading(false);
-  }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      if (isTypingRef.current) {
+        onTypingChange?.(false);
+      }
+    };
+  }, [onTypingChange]);
 
   return (
     <Box
@@ -143,7 +216,7 @@ const MessageInput = ({ onSend, disabled = false }: MessageInputProps) => {
           size="small"
           placeholder="Type a message..."
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
+          onChange={(event) => handleMessageChange(event.target.value)}
           onKeyDown={handleInputKeyDown}
           variant="standard"
           inputRef={inputRef}

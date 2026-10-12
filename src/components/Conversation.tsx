@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import ChatToolbar from "@/components/ChatToolbar";
 import MessageInput from "@/components/MessageInput";
@@ -18,6 +18,7 @@ import {
   markConversationAsRead,
   sendFileMessage,
   sendTextMessage,
+  setUserTyping,
 } from "@/lib/firebase/firestore/conversations";
 import { useGetConversationsQuery } from "@/store/api/conversationsApi";
 import { useGetMessagesQuery } from "@/store/api/messagesApi";
@@ -58,6 +59,10 @@ const Conversation = ({ conversationId }: ConversationProps) => {
     (uid) => uid !== currentUserId
   );
 
+  const otherUserTyping = otherUserId
+    ? conversation?.typing?.[otherUserId] === true
+    : false;
+
   const { data: participantUsers = [], isLoading: participantLoading } =
     useGetUsersByIdsQuery(otherUserId ?? "", {
       skip: !otherUserId,
@@ -68,6 +73,21 @@ const Conversation = ({ conversationId }: ConversationProps) => {
   const loading = conversationsLoading || messagesLoading || participantLoading;
 
   const error = conversationsError || messagesError;
+
+  const handleTypingChange = useCallback(
+    (typing: boolean) => {
+      if (!currentUserId) {
+        return;
+      }
+
+      void setUserTyping(conversationId, currentUserId, typing).catch(
+        (error) => {
+          console.error("Failed to update typing state:", error);
+        }
+      );
+    },
+    [conversationId, currentUserId]
+  );
 
   useEffect(() => {
     if (!currentUserId || !conversation) {
@@ -80,9 +100,16 @@ const Conversation = ({ conversationId }: ConversationProps) => {
       return;
     }
 
-    // Only mark the conversation as read when the latest message
-    // was sent by the other participant.
     if (latestMessage.senderId === currentUserId) {
+      return;
+    }
+
+    const currentUserReadAt = conversation.readAt?.[currentUserId] ?? null;
+
+    if (
+      currentUserReadAt !== null &&
+      latestMessage.createdAt <= currentUserReadAt
+    ) {
       return;
     }
 
@@ -91,7 +118,7 @@ const Conversation = ({ conversationId }: ConversationProps) => {
         console.error("Failed to mark conversation as read:", error);
       }
     );
-  }, [conversationId, currentUserId, conversation, messages]);
+  }, [conversationId, currentUserId, conversation?.readAt, messages, conversation]);
 
   if (!currentUserId) {
     return null;
@@ -123,6 +150,7 @@ const Conversation = ({ conversationId }: ConversationProps) => {
       setSending(false);
     }
   };
+
   return (
     <Box
       sx={{
@@ -159,6 +187,19 @@ const Conversation = ({ conversationId }: ConversationProps) => {
           overflow: "hidden",
         }}
       >
+        {otherUserTyping && (
+          <Typography
+            variant="caption"
+            sx={{
+              px: 2,
+              pb: 0.5,
+              color: "text.secondary",
+            }}
+          >
+            Typing...
+          </Typography>
+        )}
+
         {loading ? (
           <Stack flexGrow={1} alignItems="center" justifyContent="center">
             <CircularProgress size={28} />
@@ -183,10 +224,14 @@ const Conversation = ({ conversationId }: ConversationProps) => {
             </Typography>
           </Stack>
         ) : (
-          <MessageList messages={messages} currentUserId={currentUserId} readAt={conversation.readAt}/>
+          <MessageList
+            messages={messages}
+            currentUserId={currentUserId}
+            readAt={conversation.readAt}
+          />
         )}
 
-        <MessageInput onSend={handleSend} />
+        <MessageInput onSend={handleSend} onTypingChange={handleTypingChange} />
       </Stack>
     </Box>
   );

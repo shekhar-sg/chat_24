@@ -12,6 +12,7 @@ import {
   writeBatch,
   where,
   type FirestoreError,
+  type Timestamp,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase/firestore";
@@ -53,6 +54,10 @@ export async function getOrCreateDirectConversation(
         [currentUserId]: null,
         [otherUserId]: null,
       },
+      typing: {
+        [currentUserId]: false,
+        [otherUserId]: false,
+      },
       createdAt: serverTimestamp(),
     });
   }
@@ -68,6 +73,18 @@ export async function markConversationAsRead(
 
   await updateDoc(conversationRef, {
     [`readAt.${userId}`]: serverTimestamp(),
+  });
+}
+
+export async function setUserTyping(
+  conversationId: string,
+  userId: string,
+  isTyping: boolean
+) {
+  const conversationRef = getConversationRef(conversationId);
+
+  await updateDoc(conversationRef, {
+    [`typing.${userId}`]: isTyping,
   });
 }
 
@@ -196,5 +213,52 @@ export function subscribeToUserConversations(
       onData(conversations);
     },
     onError
+  );
+}
+
+export function subscribeToConversation(
+  conversationId: string,
+  onData: (data: FirestoreConversation) => void,
+  onError?: (error: FirestoreError) => void
+) {
+  const conversationRef = getConversationRef(conversationId);
+
+  return onSnapshot(
+    conversationRef,
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        return;
+      }
+
+      const data = snapshot.data();
+
+      onData({
+        id: snapshot.id,
+        type: data.type,
+        participantIds: data.participantIds,
+        lastMessage: data.lastMessage
+          ? {
+              type: data.lastMessage.type,
+              text: data.lastMessage.text,
+              senderId: data.lastMessage.senderId,
+              createdAt: data.lastMessage.createdAt?.toMillis?.() ?? Date.now(),
+              fileName: data.lastMessage.fileName,
+            }
+          : null,
+        lastMessageAt: data.lastMessageAt?.toMillis?.() ?? null,
+        readAt: Object.fromEntries(
+          Object.entries(data.readAt ?? {}).map(([userId, timestamp]) => [
+            userId,
+            timestamp ? (timestamp as Timestamp).toMillis() : null,
+          ])
+        ),
+        typing: (data.typing ?? {}) as Record<string, boolean>,
+        createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
+      });
+    },
+    (error) => {
+      console.error("Conversation listener error:", error);
+      onError?.(error);
+    }
   );
 }

@@ -45,5 +45,6 @@ export interface FirestoreConversation {
   lastMessage: LastMessage | null;
   lastMessageAt: number | null;
   readAt: Record<string, number | null>;
+  typing: Record<string, boolean>;
   createdAt: number;
 }
