@@ -1,21 +1,20 @@
 "use client";
 
 import {
+  Alert,
   Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Fade,
   Grow,
-  Slide,
   Stack,
   Typography,
 } from "@mui/material";
+import { isCloudinaryFileUrl } from "@/lib/chat";
 import DownloadIcon from "@mui/icons-material/Download";
-import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
-import { forwardRef, ReactElement, Ref } from "react";
+import { forwardRef, ReactElement, Ref, useState } from "react";
 import { TransitionProps } from "@mui/material/transitions";
 
 export interface PreviewFile {
@@ -23,9 +22,11 @@ export interface PreviewFile {
   fileUrl: string;
   fileSize: number;
   contentType: string;
+  messageId?: string;
 }
 
 interface FilePreviewDialogProps {
+  conversationId: string;
   file: PreviewFile | null;
   open: boolean;
   onClose: () => void;
@@ -45,41 +46,37 @@ const formatFileSize = (bytes: number) => {
 
 export default function FilePreviewDialog({
   file,
+  conversationId,
   open,
   onClose,
 }: FilePreviewDialogProps) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   if (!file) return null;
 
+  const trusted = isCloudinaryFileUrl(
+    file.fileUrl,
+    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ""
+  );
   const isImage =
+    trusted &&
     typeof file.contentType === "string" &&
     file.contentType.startsWith("image/");
 
-  const isPdf = file.contentType === "application/pdf";
+  const isPdf = trusted && file.contentType === "application/pdf";
 
   const handleDownload = async () => {
+    setDownloading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
-        url: file.fileUrl,
-        fileName: file.fileName,
+        conversationId,
+        messageId: file.messageId || "",
       });
 
       const response = await fetch(`/api/files/download?${params.toString()}`);
 
-      console.log("Download response:", {
-        status: response.status,
-        statusText: response.statusText,
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-
-        console.error("Download API error:", errorBody);
-
-        throw new Error(
-          `Download failed: ${response.status} ${response.statusText}`
-        );
-      }
-
+      if (!response.ok) throw new Error("Download failed");
       const blob = await response.blob();
 
       const url = URL.createObjectURL(blob);
@@ -92,9 +89,11 @@ export default function FilePreviewDialog({
       link.click();
       link.remove();
 
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Download error:", error);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setError("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -119,10 +118,11 @@ export default function FilePreviewDialog({
           textAlign: "center",
         }}
       >
-        {file.fileName}
+        {file.fileName} ({formatFileSize(file.fileSize)})
       </DialogTitle>
 
       <DialogContent dividers>
+        {error && <Alert severity="error">{error}</Alert>}
         {isImage && (
           <Box
             component="img"
@@ -169,9 +169,10 @@ export default function FilePreviewDialog({
         <Button
           variant="contained"
           startIcon={<DownloadIcon />}
+          disabled={downloading}
           onClick={handleDownload}
         >
-          Download
+          {downloading ? "Downloading..." : "Download"}
         </Button>
       </DialogActions>
     </Dialog>

@@ -12,7 +12,6 @@ import { db } from "@/lib/firebase/firestore";
 import type { FirestoreUser } from "@/types/firestore";
 import { baseApi } from "./baseApi";
 
-const USER_LIMIT = 30;
 const MAX_IDS_PER_QUERY = 30;
 
 export interface UserWithId extends FirestoreUser {
@@ -21,13 +20,16 @@ export interface UserWithId extends FirestoreUser {
 
 export const usersApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
-    getUsers: build.query<UserWithId[], string | undefined>({
-      async queryFn(excludedUserId) {
+    getUsers: build.query<
+      { users: UserWithId[]; hasMore: boolean },
+      { excludedUserId: string; pageSize: number }
+    >({
+      async queryFn({ excludedUserId, pageSize }) {
         try {
           const usersQuery = query(
             collection(db, "users"),
             orderBy("displayName"),
-            limit(USER_LIMIT)
+            limit(pageSize + 1)
           );
 
           const snapshot = await getDocs(usersQuery);
@@ -40,7 +42,7 @@ export const usersApi = baseApi.injectEndpoints({
             .filter((user) => user.id !== excludedUserId);
 
           return {
-            data: users,
+            data: { users, hasMore: snapshot.size === pageSize + 1 },
           };
         } catch (error) {
           return {
@@ -59,7 +61,7 @@ export const usersApi = baseApi.injectEndpoints({
                 type: "User",
                 id: "LIST",
               },
-              ...result.map((user) => ({
+              ...result.users.map((user) => ({
                 type: "User" as const,
                 id: user.id,
               })),

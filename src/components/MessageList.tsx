@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Chip, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, Stack, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import FilePreviewDialog, { type PreviewFile } from "./FilePreviewDialog";
 import MessageBubble from "./MessageBubble";
@@ -13,6 +13,10 @@ type Message = FirestoreMessage & {
 interface MessageListProps {
   messages: Message[];
   currentUserId: string;
+  conversationId: string;
+  otherUserId?: string;
+  hasMore: boolean;
+  onLoadMore: () => void;
   readAt?: Record<string, number | null>;
 }
 
@@ -94,7 +98,18 @@ const formatDateLabel = (createdAt: FirestoreMessage["createdAt"]) => {
 };
 
 const MessageList = (props: MessageListProps) => {
-  const { messages, currentUserId, readAt } = props;
+  const {
+    messages,
+    currentUserId,
+    readAt,
+    otherUserId,
+    conversationId,
+    hasMore,
+    onLoadMore,
+  } = props;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previousLastId = useRef<string | undefined>(undefined);
+  const previousHeight = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<PreviewFile | null>(null);
@@ -116,14 +131,24 @@ const MessageList = (props: MessageListProps) => {
   }, [messages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [messages]);
-
-  const otherUserId = messages.find(
-    (message) => message.senderId !== currentUserId
-  )?.senderId;
+    const container = containerRef.current;
+    if (container && previousHeight.current !== null) {
+      container.scrollTop += container.scrollHeight - previousHeight.current;
+      previousHeight.current = null;
+    } else if (previousLastId.current !== messages.at(-1)?.id) {
+      const nearBottom =
+        !container ||
+        container.scrollHeight - container.scrollTop - container.clientHeight <
+          180;
+      if (
+        !previousLastId.current ||
+        nearBottom ||
+        messages.at(-1)?.senderId === currentUserId
+      )
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    previousLastId.current = messages.at(-1)?.id;
+  }, [messages, currentUserId]);
 
   const otherUserReadAt = otherUserId ? (readAt?.[otherUserId] ?? null) : null;
 
@@ -131,6 +156,7 @@ const MessageList = (props: MessageListProps) => {
     return (
       message.senderId === currentUserId &&
       otherUserReadAt !== null &&
+      message.createdAt !== null &&
       message.createdAt <= otherUserReadAt
     );
   };
@@ -138,6 +164,9 @@ const MessageList = (props: MessageListProps) => {
   return (
     <>
       <Box
+        ref={containerRef}
+        role="log"
+        aria-label="Messages"
         sx={{
           flex: 1,
           minHeight: 0,
@@ -153,6 +182,17 @@ const MessageList = (props: MessageListProps) => {
           },
         }}
       >
+        {hasMore && (
+          <Button
+            onClick={() => {
+              previousHeight.current =
+                containerRef.current?.scrollHeight ?? null;
+              onLoadMore();
+            }}
+          >
+            Load older messages
+          </Button>
+        )}
         {messages.length === 0 ? (
           <Stack flex={1} alignItems="center" justifyContent="center" px={3}>
             <Typography color="text.secondary" textAlign="center" fontSize={14}>
@@ -204,6 +244,7 @@ const MessageList = (props: MessageListProps) => {
 
                   {message.type === "file" ? (
                     <MessageBubble
+                      message={message.caption}
                       time={formatMessageTime(message.createdAt)}
                       isMe={isMe}
                       seen={isMessageSeen(message)}
@@ -213,7 +254,9 @@ const MessageList = (props: MessageListProps) => {
                         fileSize: message.fileSize,
                         contentType: message.contentType,
                       }}
-                      onFileClick={setSelectedFile}
+                      onFileClick={(file) =>
+                        setSelectedFile({ ...file, messageId: message.id })
+                      }
                     />
                   ) : (
                     <MessageBubble
@@ -233,6 +276,7 @@ const MessageList = (props: MessageListProps) => {
       </Box>
 
       <FilePreviewDialog
+        conversationId={conversationId}
         file={selectedFile}
         open={Boolean(selectedFile)}
         onClose={() => setSelectedFile(null)}

@@ -2,6 +2,8 @@
 
 import { Close, PersonAdd, Search } from "@mui/icons-material";
 import {
+  Alert,
+  Button,
   Avatar,
   Box,
   CircularProgress,
@@ -37,19 +39,21 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
 
   const currentUserId = useAppSelector((state) => state.auth.user?.uid);
 
+  const [pageSize, setPageSize] = useState(30);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [creatingConversation, setCreatingConversation] = useState<
     string | null
   >(null);
 
-  const {
-    data: users = [],
-    isLoading,
-    isError,
-  } = useGetUsersQuery(currentUserId, {
-    skip: !open || !currentUserId,
-  });
+  const { data, refetch, isFetching, isLoading, isError } = useGetUsersQuery(
+    { excludedUserId: currentUserId || "", pageSize },
+    {
+      skip: !open || !currentUserId,
+    }
+  );
 
+  const users = useMemo(() => data?.users ?? [], [data]);
   const debouncedSearch = useDebounce(
     search.trim().toLowerCase(),
     SEARCH_DEBOUNCE_MS
@@ -75,6 +79,8 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
     }
 
     setSearch("");
+    setError(null);
+    setPageSize(30);
     setCreatingConversation(null);
     onClose();
   };
@@ -84,6 +90,7 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
       return;
     }
 
+    setError(null);
     setCreatingConversation(userId);
 
     try {
@@ -96,6 +103,7 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
       router.push(`/conversation/${conversationId}`);
     } catch (error) {
       console.error("Failed to create conversation:", error);
+      setError("Unable to start this conversation. Please try again.");
 
       setCreatingConversation(null);
     }
@@ -130,6 +138,11 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
       </DialogTitle>
 
       <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <Box
           sx={{
             display: "flex",
@@ -152,7 +165,8 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
           <InputBase
             fullWidth
             autoFocus
-            placeholder="Search people"
+            placeholder="Search loaded people"
+            inputProps={{ "aria-label": "Search people" }}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -160,7 +174,8 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
 
         {isError && (
           <Typography color="error" variant="body2" sx={{ mb: 1.5 }}>
-            Unable to load users.
+            Unable to load users.{" "}
+            <Button onClick={() => void refetch()}>Retry</Button>
           </Typography>
         )}
 
@@ -204,6 +219,14 @@ const NewConversation = ({ open, onClose }: NewConversationProps) => {
               );
             })}
           </List>
+        )}
+        {data?.hasMore && (
+          <Button
+            disabled={isFetching || Boolean(creatingConversation)}
+            onClick={() => setPageSize((value) => value + 30)}
+          >
+            Load more people
+          </Button>
         )}
       </DialogContent>
     </Dialog>

@@ -55,12 +55,11 @@ const AICopilotSection = () => {
     >
       <Box sx={{ p: 2 }}>
         <Typography variant={"h2"} gutterBottom>
-          AI Copilot
+          Copilot demo
         </Typography>
         <Typography variant={"body1"}>
-          The AI Copilot assists you in various tasks, providing suggestions and
-          automating repetitive actions. It learns from your interactions to
-          improve its responses over time.
+          This is an interactive UI demo with canned replies. No AI provider is
+          connected, and messages are not saved.
         </Typography>
       </Box>
       <Box sx={{ flex: 1, overflowY: "auto", px: 2, py: 1 }}>
@@ -75,7 +74,8 @@ const AICopilotSection = () => {
           >
             <Box
               sx={{
-                bgcolor: msg.sender === "user" ? "primary.main" : "grey.200",
+                bgcolor:
+                  msg.sender === "user" ? "primary.main" : "action.hover",
                 color:
                   msg.sender === "user"
                     ? "primary.contrastText"
@@ -110,6 +110,8 @@ const AICopilotSection = () => {
                   <IconButton
                     color="primary"
                     size="small"
+                    aria-label="Send demo message"
+                    disabled={!message.trim()}
                     onClick={() => {
                       handleSend();
                     }}

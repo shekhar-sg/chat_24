@@ -1,54 +1,44 @@
 import { NextResponse } from "next/server";
-
 import { adminDb } from "@/lib/firebase/firebase-admin";
-import { verifySessionCookie } from "@/lib/firebase/auth-server";
+import { getCurrentUser } from "@/lib/firebase/get-current-user";
+import { isSameOrigin } from "@/lib/server/request";
 
 export async function POST(request: Request) {
-  try {
-    const cookieHeader = request.headers.get("cookie") ?? "";
-
-    const sessionCookie = cookieHeader
-      .split(";")
-      .map((cookie) => cookie.trim())
-      .find((cookie) => cookie.startsWith("session="))
-      ?.split("=")
-      .slice(1)
-      .join("=");
-
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decodedToken = await verifySessionCookie(sessionCookie);
-
-    const body = await request.json();
-
-    const displayName =
-      typeof body?.displayName === "string" ? body.displayName.trim() : null;
-
-    const email =
-      typeof body?.email === "string"
-        ? body.email.trim()
-        : (decodedToken.email ?? null);
-
-    const photoURL = typeof body?.photoURL === "string" ? body.photoURL : null;
-
-    const status = typeof body?.status === "string" ? body.status.trim() : null;
-
-    await adminDb.collection("users").doc(decodedToken.uid).set(
-      {
-        displayName,
-        email,
-        photoURL,
-        status,
-      },
-      { merge: true }
-    );
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Failed to create user profile:", error);
-
+  if (!isSameOrigin(request))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const displayName =
+    typeof body?.displayName === "string" ? body.displayName.trim() : "";
+  if (!displayName || displayName.length > 80)
+    return NextResponse.json(
+      { error: "Display name must contain 1–80 characters." },
+      { status: 400 }
+    );
+  try {
+    const ref = adminDb.collection("users").doc(user.uid);
+    await adminDb.runTransaction(async (transaction) => {
+      const profile = await transaction.get(ref);
+      if (!profile.exists)
+        transaction.create(ref, {
+          displayName,
+          email: user.email ?? null,
+          photoURL: null,
+          status: null,
+        });
+    });
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json(
+      { error: "Unable to save your profile. Please retry." },
+      { status: 503 }
+    );
   }
 }

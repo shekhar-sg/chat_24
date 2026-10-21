@@ -1,9 +1,12 @@
 "use client";
-
 import AttachFileIcon from "@mui/icons-material/AttachFile";
-import { IconButton, Tooltip, Zoom } from "@mui/material";
-import { CldUploadWidget } from "next-cloudinary";
-
+import { IconButton, Tooltip } from "@mui/material";
+import { useEffect, useRef } from "react";
+import {
+  validateAttachment,
+  MAX_FILE_SIZE,
+  ALLOWED_CONTENT_TYPES,
+} from "@/lib/chat";
 export interface UploadedFile {
   fileName: string;
   fileUrl: string;
@@ -11,125 +14,79 @@ export interface UploadedFile {
   contentType: string;
 }
 
-interface FileUploadButtonProps {
+export default function FileUploadButton({
+  conversationId,
+  disabled,
+  onUpload,
+  onUploadStart,
+  onUploadError,
+  onClose,
+}: {
+  conversationId: string;
   disabled?: boolean;
   onUpload: (file: UploadedFile) => void;
   onUploadStart?: () => void;
   onUploadError?: (error: unknown) => void;
   onClose?: () => void;
-}
-
-interface CloudinaryUploadInfo {
-  secure_url?: string;
-  original_filename?: string;
-  bytes?: number;
-  resource_type?: string;
-  format?: string;
-}
-
-interface CloudinaryUploadResult {
-  info?: CloudinaryUploadInfo | string;
-}
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-const ALLOWED_FORMATS = ["jpg", "jpeg", "png", "webp", "pdf"];
-
-const getContentType = (resourceType?: string, format?: string) => {
-  if (format === "pdf") {
-    return "application/pdf";
-  }
-
-  if (resourceType === "image" && format) {
-    return `image/${format}`;
-  }
-
-  return "application/octet-stream";
-};
-
-const FileUploadButton = ({
-  disabled = false,
-  onUpload,
-  onUploadStart,
-  onUploadError,
-  onClose,
-}: FileUploadButtonProps) => {
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
   return (
-    <CldUploadWidget
-      signatureEndpoint="/api/cloudinary/sign"
-      options={{
-        sources: ["local"],
-        multiple: false,
-        maxFiles: 1,
-        maxFileSize: MAX_FILE_SIZE,
-        clientAllowedFormats: ALLOWED_FORMATS,
-        resourceType: "auto",
-        folder: "chat-files",
-        singleUploadAutoClose: true,
-      }}
-      onOpen={() => {
-        onUploadStart?.();
-      }}
-      onSuccess={(result) => {
-        const info = result.info;
-
-        if (
-          typeof info !== "object" ||
-          info === null ||
-          !info.secure_url ||
-          !info.original_filename ||
-          typeof info.bytes !== "number"
-        ) {
-          const error = new Error(
-            "Cloudinary returned incomplete upload information."
-          );
-
-          onUploadError?.(error);
-
-          return;
-        }
-
-        if (info.bytes > MAX_FILE_SIZE) {
-          const error = new Error("File exceeds the 10 MB size limit.");
-
-          onUploadError?.(error);
-
-          return;
-        }
-
-        onUpload({
-          fileName: info.original_filename,
-          fileUrl: info.secure_url,
-          fileSize: info.bytes,
-          contentType: getContentType(info.resource_type, info.format),
-        });
-      }}
-      onError={(error) => {
-        onUploadError?.(error);
-      }}
-      onClose={onClose}
-    >
-      {({ open }) => (
-        <Tooltip
-          title="Attach file"
-          followCursor
-          arrow
-          slots={{ transition: Zoom }}
-        >
-          <span>
-            <IconButton
-              color="primary"
-              onClick={() => open()}
-              disabled={disabled}
-              size="small"
-            >
-              <AttachFileIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      )}
-    </CldUploadWidget>
+    <>
+      <input
+        ref={input}
+        type="file"
+        hidden
+        accept=".jpg,.jpeg,.png,.webp,.pdf"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) return;
+          if (
+            file.size <= 0 ||
+            file.size > MAX_FILE_SIZE ||
+            !ALLOWED_CONTENT_TYPES.includes(file.type)
+          ) {
+            onUploadError?.(new Error("Invalid file"));
+            return;
+          }
+          onUploadStart?.();
+          controller.current = new AbortController();
+          try {
+            const data = new FormData();
+            data.set("file", file);
+            data.set("conversationId", conversationId);
+            const response = await fetch("/api/files/upload", {
+              method: "POST",
+              body: data,
+              signal: controller.current.signal,
+            });
+            if (!response.ok) throw new Error("Upload failed");
+            const uploaded: UploadedFile = await response.json();
+            validateAttachment(
+              uploaded,
+              process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ""
+            );
+            onUpload(uploaded);
+          } catch (error) {
+            if (!controller.current.signal.aborted) onUploadError?.(error);
+          } finally {
+            onClose?.();
+          }
+        }}
+      />
+      <Tooltip title="Attach image or PDF (up to 10 MB)">
+        <span>
+          <IconButton
+            aria-label="Attach file"
+            disabled={disabled}
+            onClick={() => input.current?.click()}
+          >
+            <AttachFileIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </>
   );
-};
-
-export default FileUploadButton;
+}

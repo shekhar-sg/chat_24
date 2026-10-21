@@ -1,9 +1,4 @@
-import {
-  AutoFixHigh,
-  Brightness4,
-  Inbox,
-  MoreHoriz,
-} from "@mui/icons-material";
+import { AutoFixHigh, Brightness4, Inbox } from "@mui/icons-material";
 import {
   AppBar,
   Avatar,
@@ -94,9 +89,6 @@ function ChatToolbar(props: ChatToolbarProps) {
           </Typography>
         </Box>
 
-        <IconButton color="inherit" aria-label="conversation menu" size="small">
-          <MoreHoriz fontSize="small" />
-        </IconButton>
         <IconButton
           color="inherit"
           aria-label="toggle theme"
@@ -114,7 +106,6 @@ function ChatToolbar(props: ChatToolbarProps) {
         <Chip
           component={Link}
           href={"/"}
-          disabled={!user.displayName}
           sx={{
             bgcolor: "primary.main",
             padding: 0.8,
@@ -123,7 +114,7 @@ function ChatToolbar(props: ChatToolbarProps) {
             cursor: "pointer",
           }}
           icon={<Inbox fontSize={"small"} color={"inherit"} />}
-          label={"Close"}
+          label={"Inbox"}
           variant={"filled"}
         />
         {!isAIChatSidebarOpen && (

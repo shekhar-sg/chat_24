@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 
 import { signOutUser } from "@/lib/firebase/auth";
-import { useRouter } from "next/navigation";
+import { clearServerSession } from "@/lib/firebase/session-client";
 
 interface LogoutButtonProps {
   variant?: "icon" | "button";
@@ -27,7 +27,6 @@ export default function LogoutButton({ variant = "icon" }: LogoutButtonProps) {
   const [open, setOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   const handleClose = () => {
     if (!isSigningOut) {
@@ -43,19 +42,14 @@ export default function LogoutButton({ variant = "icon" }: LogoutButtonProps) {
     setIsSigningOut(true);
 
     try {
+      await clearServerSession();
       await signOutUser();
-
-      const response = await fetch("/api/auth/session", {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to clear server session.");
-      }
-      router.replace("/");
+      window.location.replace("/login");
     } catch (error) {
       console.error("Failed to sign out:", error);
       setError("Something went wrong while signing out. Please try again.");
+    } finally {
+      setIsSigningOut(false);
     }
   };
 

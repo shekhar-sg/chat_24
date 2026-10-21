@@ -1,264 +1,123 @@
 import {
   collection,
   doc,
-  getDoc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   writeBatch,
-  where,
-  type FirestoreError,
-  type Timestamp,
+  FieldPath,
 } from "firebase/firestore";
-
 import { db } from "@/lib/firebase/firestore";
-import type { FirestoreConversation } from "@/types/firestore";
-
-const CONVERSATION_LIMIT = 30;
+import { MAX_MESSAGE_LENGTH, validateAttachment } from "@/lib/chat";
 
 export function getDirectConversationId(uidA: string, uidB: string) {
   const [firstUid, secondUid] = [uidA, uidB].sort();
-
   return `${firstUid}_${secondUid}`;
 }
-
-export function getConversationRef(conversationId: string) {
-  return doc(db, "conversations", conversationId);
+export function getConversationRef(id: string) {
+  return doc(db, "conversations", id);
 }
 
 export async function getOrCreateDirectConversation(
   currentUserId: string,
   otherUserId: string
 ) {
-  if (currentUserId === otherUserId) {
-    throw new Error("A user cannot start a conversation with themselves.");
-  }
-
+  if (!currentUserId || !otherUserId || currentUserId === otherUserId)
+    throw new Error("Choose another user to start a conversation.");
   const conversationId = getDirectConversationId(currentUserId, otherUserId);
-
-  const conversationRef = getConversationRef(conversationId);
-
-  const snapshot = await getDoc(conversationRef);
-
-  if (!snapshot.exists()) {
-    await setDoc(conversationRef, {
+  const ref = getConversationRef(conversationId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (snapshot.exists()) {
+      if (
+        !snapshot.data().participantIds.includes(currentUserId) ||
+        !snapshot.data().participantIds.includes(otherUserId)
+      )
+        throw new Error("Invalid conversation participants.");
+      return;
+    }
+    transaction.set(ref, {
       type: "direct",
       participantIds: [currentUserId, otherUserId],
       lastMessage: null,
       lastMessageAt: null,
-      readAt: {
-        [currentUserId]: null,
-        [otherUserId]: null,
-      },
-      typing: {
-        [currentUserId]: false,
-        [otherUserId]: false,
-      },
+      readAt: { [currentUserId]: null, [otherUserId]: null },
+      typing: { [currentUserId]: false, [otherUserId]: false },
+      typingAt: { [currentUserId]: null, [otherUserId]: null },
       createdAt: serverTimestamp(),
     });
-  }
-
+  });
   return conversationId;
 }
 
-export async function markConversationAsRead(
-  conversationId: string,
-  userId: string
-) {
-  const conversationRef = getConversationRef(conversationId);
-
-  await updateDoc(conversationRef, {
-    [`readAt.${userId}`]: serverTimestamp(),
-  });
-}
-
-export async function setUserTyping(
-  conversationId: string,
-  userId: string,
-  isTyping: boolean
-) {
-  const conversationRef = getConversationRef(conversationId);
-
-  await updateDoc(conversationRef, {
-    [`typing.${userId}`]: isTyping,
-  });
-}
-
-export async function sendTextMessage(
-  conversationId: string,
-  senderId: string,
-  text: string
-) {
-  const trimmedText = text.trim();
-
-  if (!trimmedText) {
-    throw new Error("Message cannot be empty.");
-  }
-
-  const conversationRef = getConversationRef(conversationId);
-
-  const messageRef = doc(
-    collection(db, "conversations", conversationId, "messages")
+export async function markConversationAsRead(id: string, uid: string) {
+  await updateDoc(
+    getConversationRef(id),
+    new FieldPath("readAt", uid),
+    serverTimestamp()
   );
-
-  const batch = writeBatch(db);
-
-  batch.set(messageRef, {
-    senderId,
-    text: trimmedText,
-    type: "text",
-    createdAt: serverTimestamp(),
-  });
-
-  batch.update(conversationRef, {
-    lastMessage: {
-      text: trimmedText,
-      senderId,
-      type: "text",
-      createdAt: serverTimestamp(),
-    },
-    lastMessageAt: serverTimestamp(),
-  });
-
-  await batch.commit();
-
-  return messageRef.id;
+}
+export async function setUserTyping(id: string, uid: string, typing: boolean) {
+  await updateDoc(
+    getConversationRef(id),
+    new FieldPath("typing", uid),
+    typing,
+    new FieldPath("typingAt", uid),
+    serverTimestamp()
+  );
 }
 
-interface SendFileMessageInput {
+interface FileInput {
   senderId: string;
   fileName: string;
   fileUrl: string;
   fileSize: number;
   contentType: string;
+  caption?: string;
 }
 
-export async function sendFileMessage(
-  conversationId: string,
-  input: SendFileMessageInput
+async function commitMessage(
+  id: string,
+  message:
+    | { senderId: string; type: "text"; text: string }
+    | (FileInput & { type: "file" })
 ) {
-  if (!input.fileName.trim()) {
-    throw new Error("File name is required.");
-  }
-
-  if (!input.fileUrl) {
-    throw new Error("File URL is required.");
-  }
-
-  if (input.fileSize <= 0) {
-    throw new Error("Invalid file size.");
-  }
-
-  if (!input.contentType) {
-    throw new Error("File type is required.");
-  }
-
-  const conversationRef = getConversationRef(conversationId);
-
-  const messageRef = doc(
-    collection(db, "conversations", conversationId, "messages")
-  );
-
+  const conversationRef = getConversationRef(id);
+  const messageRef = doc(collection(conversationRef, "messages"));
   const batch = writeBatch(db);
-
-  batch.set(messageRef, {
-    senderId: input.senderId,
-    type: "file",
-    fileName: input.fileName,
-    fileUrl: input.fileUrl,
-    fileSize: input.fileSize,
-    contentType: input.contentType,
-    createdAt: serverTimestamp(),
-  });
-
+  batch.set(messageRef, { ...message, createdAt: serverTimestamp() });
   batch.update(conversationRef, {
     lastMessage: {
-      type: "file",
-      fileName: input.fileName,
-      senderId: input.senderId,
+      type: message.type,
+      senderId: message.senderId,
+      messageId: messageRef.id,
+      ...(message.type === "text"
+        ? { text: message.text }
+        : { fileName: message.fileName }),
       createdAt: serverTimestamp(),
     },
     lastMessageAt: serverTimestamp(),
   });
-
   await batch.commit();
-
   return messageRef.id;
 }
-
-export function subscribeToUserConversations(
-  uid: string,
-  onData: (conversations: FirestoreConversation[]) => void,
-  onError: (error: FirestoreError) => void
+export async function sendTextMessage(
+  id: string,
+  senderId: string,
+  text: string
 ) {
-  const conversationsQuery = query(
-    collection(db, "conversations"),
-    where("participantIds", "array-contains", uid),
-    orderBy("lastMessageAt", "desc"),
-    limit(CONVERSATION_LIMIT)
-  );
-
-  return onSnapshot(
-    conversationsQuery,
-    (snapshot) => {
-      const conversations = snapshot.docs.map((conversationSnapshot) => ({
-        id: conversationSnapshot.id,
-        ...conversationSnapshot.data(),
-      })) as FirestoreConversation[];
-
-      onData(conversations);
-    },
-    onError
-  );
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error("Messages must contain 1–10,000 characters.");
+  return commitMessage(id, { senderId, type: "text", text: trimmed });
 }
-
-export function subscribeToConversation(
-  conversationId: string,
-  onData: (data: FirestoreConversation) => void,
-  onError?: (error: FirestoreError) => void
-) {
-  const conversationRef = getConversationRef(conversationId);
-
-  return onSnapshot(
-    conversationRef,
-    (snapshot) => {
-      if (!snapshot.exists()) {
-        return;
-      }
-
-      const data = snapshot.data();
-
-      onData({
-        id: snapshot.id,
-        type: data.type,
-        participantIds: data.participantIds,
-        lastMessage: data.lastMessage
-          ? {
-              type: data.lastMessage.type,
-              text: data.lastMessage.text,
-              senderId: data.lastMessage.senderId,
-              createdAt: data.lastMessage.createdAt?.toMillis?.() ?? Date.now(),
-              fileName: data.lastMessage.fileName,
-            }
-          : null,
-        lastMessageAt: data.lastMessageAt?.toMillis?.() ?? null,
-        readAt: Object.fromEntries(
-          Object.entries(data.readAt ?? {}).map(([userId, timestamp]) => [
-            userId,
-            timestamp ? (timestamp as Timestamp).toMillis() : null,
-          ])
-        ),
-        typing: (data.typing ?? {}) as Record<string, boolean>,
-        createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
-      });
-    },
-    (error) => {
-      console.error("Conversation listener error:", error);
-      onError?.(error);
-    }
+export async function sendFileMessage(id: string, input: FileInput) {
+  validateAttachment(
+    input,
+    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ""
   );
+  const caption = input.caption?.trim() || "";
+  if (caption.length > MAX_MESSAGE_LENGTH)
+    throw new Error("Caption exceeds 10,000 characters.");
+  return commitMessage(id, { ...input, caption, type: "file" });
 }

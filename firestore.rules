@@ -1,89 +1,98 @@
 rules_version = '2';
-
+// users: signed-in member directory; private credentials must never be stored here.
+// conversations: immutable direct pair and creation timestamp; own read/typing maps.
+// messages: immutable text or validated file with optional caption; atomic summary update.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function participant(id) {
+      return signedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.participantIds;
     }
-
-    function isParticipant(conversationId) {
-      return isSignedIn()
-      && request.auth.uid in get(
-        /databases/$(database)/documents/conversations/$(conversationId)
-      ).data.participantIds;
+    function boundedString(value, max) { return value is string && value.size() > 0 && value.size() <= max; }
+    function validSummary(value) {
+      return value == null || (value is map
+        && value.keys().hasAll(['type', 'senderId', 'createdAt'])
+        && value.keys().hasOnly(['type', 'senderId', 'createdAt', 'messageId', 'text', 'fileName'])
+        && value.createdAt is timestamp && boundedString(value.senderId, 128)
+        && (!('messageId' in value) || boundedString(value.messageId, 1500))
+        && ((value.type == 'text' && value.keys().hasOnly(['type', 'senderId', 'createdAt', 'messageId', 'text']) && boundedString(value.text, 10000))
+          || (value.type == 'file' && value.keys().hasOnly(['type', 'senderId', 'createdAt', 'messageId', 'fileName']) && boundedString(value.fileName, 255))));
     }
-
+    function validConversation(data) {
+      return data.keys().hasAll(['type', 'participantIds', 'lastMessage', 'lastMessageAt', 'readAt', 'typing', 'createdAt'])
+        && data.keys().hasOnly(['type', 'participantIds', 'lastMessage', 'lastMessageAt', 'readAt', 'typing', 'typingAt', 'createdAt'])
+        && data.type == 'direct' && data.participantIds is list && data.participantIds.size() == 2
+        && boundedString(data.participantIds[0], 128) && boundedString(data.participantIds[1], 128)
+        && data.participantIds[0] != data.participantIds[1]
+        && data.createdAt is timestamp && (data.lastMessageAt == null || data.lastMessageAt is timestamp)
+        && validSummary(data.lastMessage)
+        && data.readAt is map && data.readAt.keys().hasAll(data.participantIds) && data.readAt.keys().hasOnly(data.participantIds)
+        && (data.readAt[data.participantIds[0]] == null || data.readAt[data.participantIds[0]] is timestamp)
+        && (data.readAt[data.participantIds[1]] == null || data.readAt[data.participantIds[1]] is timestamp)
+        && data.typing is map && data.typing.keys().hasAll(data.participantIds) && data.typing.keys().hasOnly(data.participantIds)
+        && data.typing[data.participantIds[0]] is bool && data.typing[data.participantIds[1]] is bool
+        && (!('typingAt' in data) || (data.typingAt is map && data.typingAt.keys().hasOnly(data.participantIds)
+          && (data.typingAt.get(data.participantIds[0], null) == null || data.typingAt[data.participantIds[0]] is timestamp)
+          && (data.typingAt.get(data.participantIds[1], null) == null || data.typingAt[data.participantIds[1]] is timestamp)));
+    }
+    function validOwnMetadata(data) {
+      return (data.readAt == resource.data.readAt || (data.readAt.diff(resource.data.readAt).affectedKeys().hasOnly([request.auth.uid]) && data.readAt[request.auth.uid] == request.time))
+        && (data.typing == resource.data.typing || data.typing.diff(resource.data.typing).affectedKeys().hasOnly([request.auth.uid]))
+        && (data.get('typingAt', {}) == resource.data.get('typingAt', {}) || (data.get('typingAt', {}).diff(resource.data.get('typingAt', {})).affectedKeys().hasOnly([request.auth.uid]) && data.typingAt[request.auth.uid] == request.time));
+    }
+    function validMessage(data) {
+      return data.keys().hasAll(['type', 'senderId', 'createdAt'])
+        && data.senderId == request.auth.uid && data.createdAt == request.time
+        && ((data.type == 'text' && data.keys().hasOnly(['type', 'senderId', 'createdAt', 'text']) && boundedString(data.text, 10000))
+        || (data.type == 'file' && data.keys().hasAll(['fileName', 'fileUrl', 'fileSize', 'contentType'])
+          && data.keys().hasOnly(['type', 'senderId', 'createdAt', 'fileName', 'fileUrl', 'fileSize', 'contentType', 'caption'])
+          && boundedString(data.fileName, 255) && boundedString(data.fileUrl, 2048)
+          && data.fileUrl.matches('https://res[.]cloudinary[.]com/gripcloudinarycloud/(image|raw)/upload/(v[0-9]+/)?chat-files/.*')
+          && data.fileSize is int && data.fileSize > 0 && data.fileSize <= 10485760
+          && data.contentType in ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+          && (!('caption' in data) || (data.caption is string && data.caption.size() <= 10000))));
+    }
+    function validSummaryUpdate(id, data) {
+      let mid = data.lastMessage.messageId;
+      let path = /databases/$(database)/documents/conversations/$(id)/messages/$(mid);
+      let message = getAfter(path).data;
+      return !exists(path) && data.lastMessageAt == request.time
+        && data.lastMessage.createdAt == request.time && data.lastMessage.senderId == request.auth.uid
+        && message.senderId == request.auth.uid && message.createdAt == request.time
+        && message.type == data.lastMessage.type
+        && ((message.type == 'text' && message.text == data.lastMessage.text) || (message.type == 'file' && message.fileName == data.lastMessage.fileName));
+    }
     match /users/{uid} {
-      allow read: if isSignedIn();
-
-      allow write: if isSignedIn()
-      && request.auth.uid == uid;
+      allow read: if signedIn();
+      // Profiles are created by the session-verified server route, never by clients.
+      allow write: if false;
     }
-
-    match /conversations/{conversationId} {
-      allow get: if isSignedIn()
-      && (
-        !exists(
-          /databases/$(database)/documents/conversations/$(conversationId)
-        )
-        || request.auth.uid in resource.data.participantIds
-      );
-
-      allow list: if isSignedIn()
-      && request.auth.uid in resource.data.participantIds;
-
-      allow create: if isSignedIn()
-      && request.auth.uid in request.resource.data.participantIds
-      && request.resource.data.type == "direct"
-      && request.resource.data.participantIds is list
-      && request.resource.data.participantIds.size() == 2;
-
-      allow update: if isParticipant(conversationId)
-      && request.resource.data.participantIds
-      == resource.data.participantIds
-      && request.resource.data.type
-      == resource.data.type;
-
+    match /conversations/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/conversations/$(id)) || request.auth.uid in resource.data.participantIds);
+      allow list: if signedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if signedIn() && validConversation(request.resource.data)
+        && request.auth.uid in request.resource.data.participantIds
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.participantIds[0]))
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.participantIds[1]))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastMessage == null && request.resource.data.lastMessageAt == null
+        && request.resource.data.readAt[request.resource.data.participantIds[0]] == null
+        && request.resource.data.readAt[request.resource.data.participantIds[1]] == null
+        && request.resource.data.typing[request.resource.data.participantIds[0]] == false
+        && request.resource.data.typing[request.resource.data.participantIds[1]] == false
+        && request.resource.data.get('typingAt', {}).get(request.resource.data.participantIds[0], null) == null
+        && request.resource.data.get('typingAt', {}).get(request.resource.data.participantIds[1], null) == null;
+      allow update: if participant(id) && validConversation(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'readAt', 'typing', 'typingAt'])
+        && validOwnMetadata(request.resource.data)
+        && ((request.resource.data.lastMessage == resource.data.lastMessage && request.resource.data.lastMessageAt == resource.data.lastMessageAt)
+          || validSummaryUpdate(id, request.resource.data));
       allow delete: if false;
-
       match /messages/{messageId} {
-        allow read: if isParticipant(conversationId);
-
-        allow create: if isParticipant(conversationId)
-        && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.type in ["text", "file"]
-        && (
-          (
-            request.resource.data.type == "text"
-            && request.resource.data.keys().hasOnly([
-              "senderId",
-              "text",
-              "type",
-              "createdAt"
-            ])
-            && request.resource.data.text is string
-            && request.resource.data.text.size() > 0
-          )
-          ||
-          (
-            request.resource.data.type == "file"
-            && request.resource.data.keys().hasOnly([
-              "senderId",
-              "type",
-              "createdAt",
-              "fileName",
-              "fileUrl",
-              "fileSize",
-              "contentType"
-            ])
-            && request.resource.data.fileName is string
-            && request.resource.data.fileUrl is string
-            && request.resource.data.fileSize is int
-            && request.resource.data.fileSize > 0
-            && request.resource.data.contentType is string
-          )
-        );
-
+        allow read: if participant(id);
+        allow create: if participant(id) && validMessage(request.resource.data)
+          && getAfter(/databases/$(database)/documents/conversations/$(id)).data.lastMessage.messageId == messageId
+          && getAfter(/databases/$(database)/documents/conversations/$(id)).data.lastMessageAt == request.time;
         allow update, delete: if false;
       }
     }

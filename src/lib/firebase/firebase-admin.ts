@@ -6,6 +6,9 @@ const projectId = process.env.FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
+if (projectId !== process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
+  throw new Error("Firebase client and server project IDs must match.");
+
 if (!projectId || !clientEmail || !privateKey) {
   throw new Error(
     "Missing Firebase Admin environment variables. " +

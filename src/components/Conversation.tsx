@@ -1,16 +1,14 @@
 "use client";
-
-import { skipToken } from "@reduxjs/toolkit/query";
 import {
+  Alert,
   Box,
+  Button,
   CircularProgress,
   Divider,
   Stack,
   Typography,
 } from "@mui/material";
-
-import { useCallback, useEffect, useState } from "react";
-
+import { useCallback, useEffect, useRef, useState } from "react";
 import ChatToolbar from "@/components/ChatToolbar";
 import MessageInput from "@/components/MessageInput";
 import MessageList from "@/components/MessageList";
@@ -20,221 +18,197 @@ import {
   sendTextMessage,
   setUserTyping,
 } from "@/lib/firebase/firestore/conversations";
-import { useGetConversationsQuery } from "@/store/api/conversationsApi";
+import { useGetConversationQuery } from "@/store/api/conversationsApi";
 import { useGetMessagesQuery } from "@/store/api/messagesApi";
 import { useGetUsersByIdsQuery } from "@/store/api/usersApi";
 import { useAppSelector } from "@/store/hooks";
+import type { UploadedFile } from "@/components/FileUpoadButton";
 
-interface ConversationProps {
+export default function Conversation({
+  conversationId,
+}: {
   conversationId: string;
-}
-
-export interface FileMessagePayload {
-  fileName: string;
-  fileUrl: string;
-  fileSize: number;
-  contentType: string;
-}
-
-const Conversation = ({ conversationId }: ConversationProps) => {
+}) {
   const currentUserId = useAppSelector((state) => state.auth.user?.uid);
-
+  const [pageSize, setPageSize] = useState(100);
   const [sending, setSending] = useState(false);
-
-  const {
-    data: conversations = [],
-    isLoading: conversationsLoading,
-    isError: conversationsError,
-  } = useGetConversationsQuery(currentUserId ?? skipToken);
-
-  const {
-    data: messages = [],
-    isLoading: messagesLoading,
-    isError: messagesError,
-  } = useGetMessagesQuery(conversationId);
-
-  const conversation = conversations.find((item) => item.id === conversationId);
-
+  const sendingRef = useRef(false);
+  const [online, setOnline] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const conversationQuery = useGetConversationQuery(
+    conversationId,
+    Boolean(currentUserId)
+  );
+  const conversation = conversationQuery.data;
+  const authorized = Boolean(
+    currentUserId && conversation?.participantIds.includes(currentUserId)
+  );
+  const messageQuery = useGetMessagesQuery(
+    conversationId,
+    authorized,
+    pageSize
+  );
+  const messages = messageQuery.data;
   const otherUserId = conversation?.participantIds.find(
     (uid) => uid !== currentUserId
   );
+  const profileQuery = useGetUsersByIdsQuery(otherUserId || "", {
+    skip: !otherUserId,
+  });
+  const otherUser = profileQuery.data?.[0];
+  const loading = conversationQuery.isLoading || messageQuery.isLoading;
+  const failed =
+    conversationQuery.isError || messageQuery.isError || profileQuery.isError;
+  const latestMessage = messages[messages.length - 1];
+  const latestTime = latestMessage?.createdAt;
+  const readTime = currentUserId ? conversation?.readAt[currentUserId] : null;
 
-  const otherUserTyping = otherUserId
-    ? conversation?.typing?.[otherUserId] === true
-    : false;
-
-  const { data: participantUsers = [], isLoading: participantLoading } =
-    useGetUsersByIdsQuery(otherUserId ?? "", {
-      skip: !otherUserId,
-    });
-
-  const otherUser = participantUsers[0];
-
-  const loading = conversationsLoading || messagesLoading || participantLoading;
-
-  const error = conversationsError || messagesError;
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 3000);
+    return () => clearInterval(timer);
+  }, []);
+  const typing = Boolean(
+    otherUserId &&
+      conversation?.typing[otherUserId] &&
+      now - (conversation.typingAt?.[otherUserId] ?? 0) < 6000
+  );
 
   const handleTypingChange = useCallback(
-    (typing: boolean) => {
-      if (!currentUserId) {
-        return;
-      }
-
-      void setUserTyping(conversationId, currentUserId, typing).catch(
-        (error) => {
-          console.error("Failed to update typing state:", error);
-        }
-      );
+    (value: boolean) => {
+      if (!currentUserId || !authorized) return;
+      void setUserTyping(conversationId, currentUserId, value).catch(() => {});
     },
-    [conversationId, currentUserId]
+    [conversationId, currentUserId, authorized]
   );
 
   useEffect(() => {
-    if (!currentUserId || !conversation) {
-      return;
-    }
-
-    const latestMessage = messages[messages.length - 1];
-
-    if (!latestMessage) {
-      return;
-    }
-
-    if (latestMessage.senderId === currentUserId) {
-      return;
-    }
-
-    const currentUserReadAt = conversation.readAt?.[currentUserId] ?? null;
-
     if (
-      currentUserReadAt !== null &&
-      latestMessage.createdAt <= currentUserReadAt
-    ) {
+      !currentUserId ||
+      !authorized ||
+      !latestTime ||
+      latestMessage?.senderId === currentUserId ||
+      (readTime != null && latestTime <= readTime)
+    )
       return;
-    }
+    const markRead = () => {
+      if (document.visibilityState === "visible")
+        void markConversationAsRead(conversationId, currentUserId).catch(() =>
+          setNotice("Unable to update read status. Check your connection.")
+        );
+    };
+    markRead();
+    document.addEventListener("visibilitychange", markRead);
+    return () => document.removeEventListener("visibilitychange", markRead);
+  }, [
+    currentUserId,
+    authorized,
+    latestTime,
+    latestMessage?.senderId,
+    readTime,
+    conversationId,
+  ]);
 
-    void markConversationAsRead(conversationId, currentUserId).catch(
-      (error) => {
-        console.error("Failed to mark conversation as read:", error);
-      }
-    );
-  }, [conversationId, currentUserId, conversation?.readAt, messages, conversation]);
-
-  if (!currentUserId) {
-    return null;
-  }
-
-  const handleSend = async (message: string, file?: FileMessagePayload) => {
-    if (sending) return;
-
+  const handleSend = async (text: string, file?: UploadedFile) => {
+    if (!currentUserId || !authorized || sendingRef.current)
+      throw new Error("Conversation is unavailable.");
+    sendingRef.current = true;
     setSending(true);
-
     try {
-      if (file) {
+      if (file)
         await sendFileMessage(conversationId, {
+          ...file,
           senderId: currentUserId,
-          fileName: file.fileName,
-          fileUrl: file.fileUrl,
-          fileSize: file.fileSize,
-          contentType: file.contentType,
+          caption: text,
         });
-
-        return;
-      }
-
-      await sendTextMessage(conversationId, currentUserId, message);
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      throw error;
+      else await sendTextMessage(conversationId, currentUserId, text);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
-
+  const retry = () => {
+    conversationQuery.refetch();
+    messageQuery.refetch();
+    if (otherUserId) void profileQuery.refetch();
+  };
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        bgcolor: "background.default",
-      }}
-    >
-      {otherUser ? (
-        <ChatToolbar user={otherUser} />
-      ) : (
-        <ChatToolbar
-          user={{
-            id: "",
+    <Box display="flex" flexDirection="column" height="100%" minHeight={0}>
+      <ChatToolbar
+        user={
+          otherUser || {
+            id: otherUserId || "",
             displayName: "Conversation",
             email: null,
             photoURL: null,
             status: null,
-          }}
-        />
-      )}
-
+          }
+        }
+      />
       <Divider />
-
-      <Stack
-        flexGrow={1}
-        p={2}
-        sx={{
-          height: (theme) => ({
-            xs: `calc(100% - ${theme.spacing(8)})`,
-            md: `calc(100vh - ${theme.spacing(10)})`,
-          }),
-          overflow: "hidden",
-        }}
-      >
-        {otherUserTyping && (
-          <Typography
-            variant="caption"
-            sx={{
-              px: 2,
-              pb: 0.5,
-              color: "text.secondary",
-            }}
-          >
+      <Stack flex={1} minHeight={0} p={{ xs: 1, sm: 2 }} overflow="hidden">
+        {!online && (
+          <Alert severity="warning">
+            You are offline. Keep this tab open; pending messages will finish
+            sending when your connection returns.
+          </Alert>
+        )}
+        {notice && (
+          <Alert severity="warning" onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
+        )}
+        {typing && (
+          <Typography variant="caption" role="status" px={2}>
             Typing...
           </Typography>
         )}
-
-        {loading ? (
-          <Stack flexGrow={1} alignItems="center" justifyContent="center">
-            <CircularProgress size={28} />
+        {loading && !messages.length ? (
+          <Stack flex={1} alignItems="center" justifyContent="center">
+            <CircularProgress aria-label="Loading messages" />
           </Stack>
-        ) : error ? (
+        ) : failed ? (
           <Stack
-            flexGrow={1}
-            alignItems="center"
+            flex={1}
             justifyContent="center"
-            spacing={1}
+            alignItems="center"
+            spacing={2}
           >
-            <Typography color="error">Failed to load conversation.</Typography>
-
-            <Typography variant="body2" color="text.secondary">
-              Please try again.
-            </Typography>
+            <Alert severity="error">Unable to load this conversation.</Alert>
+            <Button onClick={retry}>Retry</Button>
           </Stack>
-        ) : !conversation ? (
-          <Stack flexGrow={1} alignItems="center" justifyContent="center">
-            <Typography color="text.secondary">
-              Conversation not found.
-            </Typography>
+        ) : !authorized ? (
+          <Stack flex={1} justifyContent="center" alignItems="center">
+            <Typography>Conversation not found or unavailable.</Typography>
           </Stack>
         ) : (
           <MessageList
+            conversationId={conversationId}
             messages={messages}
-            currentUserId={currentUserId}
-            readAt={conversation.readAt}
+            currentUserId={currentUserId!}
+            otherUserId={otherUserId}
+            readAt={conversation?.readAt}
+            hasMore={messages.length === pageSize}
+            onLoadMore={() => setPageSize((value) => value + 100)}
           />
         )}
-
-        <MessageInput onSend={handleSend} onTypingChange={handleTypingChange} />
+        <MessageInput
+          conversationId={conversationId}
+          onSend={handleSend}
+          onTypingChange={handleTypingChange}
+          disabled={!authorized || loading || failed || sending || !online}
+        />
       </Stack>
     </Box>
   );
-};
-
-export default Conversation;
+}

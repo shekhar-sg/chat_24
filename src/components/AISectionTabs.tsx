@@ -29,7 +29,7 @@ const AISectionTabs = () => {
       >
         <TabList
           onChange={handleChange}
-          aria-label="lab API tabs example"
+          aria-label="Copilot demo tabs"
           sx={{
             height: "100%",
           }}

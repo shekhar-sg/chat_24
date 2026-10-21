@@ -15,13 +15,14 @@ export interface TextMessage {
   type: "text";
   text: string;
   senderId: string;
-  createdAt: number;
+  createdAt: number | null;
 }
 
 export interface FileMessage {
   type: "file";
   senderId: string;
-  createdAt: number;
+  createdAt: number | null;
+  caption?: string;
   fileName: string;
   fileUrl: string;
   fileSize: number;
@@ -34,7 +35,7 @@ export interface LastMessage {
   type: MessageType;
   text?: string;
   senderId: string;
-  createdAt: number;
+  createdAt: number | null;
   fileName?: string;
 }
 
@@ -46,5 +47,6 @@ export interface FirestoreConversation {
   lastMessageAt: number | null;
   readAt: Record<string, number | null>;
   typing: Record<string, boolean>;
-  createdAt: number;
+  typingAt?: Record<string, number | null>;
+  createdAt: number | null;
 }

@@ -2,6 +2,7 @@
 
 import { Add } from "@mui/icons-material";
 import {
+  Button,
   IconButton,
   Paper,
   Stack,
@@ -9,7 +10,6 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { skipToken } from "@reduxjs/toolkit/query";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -20,6 +20,7 @@ import UserList from "@/components/UserList";
 import { useGetConversationsQuery } from "@/store/api/conversationsApi";
 import { useGetUsersByIdsQuery } from "@/store/api/usersApi";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { hasUnreadMessage, messagePreview } from "@/lib/chat";
 import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
 
 export default function ChatLayout({ children }: { children: ReactNode }) {
@@ -32,13 +33,15 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((state) => state.auth.user);
 
+  const [pageSize, setPageSize] = useState(30);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
 
   const {
     data: conversations = [],
     isLoading: conversationsLoading,
     isError: conversationsError,
-  } = useGetConversationsQuery(authUser?.uid ?? skipToken);
+    refetch: retryConversations,
+  } = useGetConversationsQuery(authUser?.uid, pageSize);
 
   const participantIds = useMemo(() => {
     if (!authUser?.uid) {
@@ -52,12 +55,13 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
     ].filter((uid) => uid !== authUser.uid);
   }, [conversations, authUser?.uid]);
 
-  const { data: participantUsers = [] } = useGetUsersByIdsQuery(
-    participantIds.join(","),
-    {
-      skip: participantIds.length === 0,
-    }
-  );
+  const {
+    data: participantUsers = [],
+    isError: profilesError,
+    refetch: retryProfiles,
+  } = useGetUsersByIdsQuery(participantIds.join(","), {
+    skip: participantIds.length === 0,
+  });
 
   const usersById = useMemo(() => {
     return new Map(participantUsers.map((user) => [user.id, user]));
@@ -75,26 +79,26 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
 
       const profile = usersById.get(otherUserId);
 
-      if (!profile) {
-        return [];
-      }
-
       const lastMessage = conversation.lastMessage;
 
       return [
         {
           id: otherUserId,
           conversationId: conversation.id,
-          name: profile.displayName || profile.email || "Unknown user",
-          avatarUrl: profile.photoURL || undefined,
-          status: profile.status || undefined,
+          name: profile?.displayName || profile?.email || "Unknown user",
+          avatarUrl: profile?.photoURL || undefined,
+          status: profile?.status || undefined,
           isGroup: false,
-          unreadCount: 0,
+          unread: Boolean(
+            authUser?.uid && hasUnreadMessage(conversation, authUser.uid)
+          ),
+          lastMessageAt:
+            conversation.lastMessageAt ?? conversation.createdAt ?? 0,
           conversation: lastMessage
             ? [
                 {
                   from: lastMessage.senderId,
-                  message: lastMessage.text,
+                  message: messagePreview(lastMessage),
                   time: conversation.lastMessageAt
                     ? new Date(conversation.lastMessageAt).toLocaleTimeString(
                         [],
@@ -122,7 +126,7 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
     <>
       <Stack
         direction="row"
-        height="100svh"
+        height="100dvh"
         width="100vw"
         overflow="hidden"
         gap={1}
@@ -137,10 +141,12 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
           sx={{
             width: {
               xs: "100%",
-              md: 400,
+              md: 320,
+              xl: 380,
             },
             border: 1,
             borderColor: "divider",
+            flexShrink: 0,
             overflow: "hidden",
             display:
               isBelowMd && !isConversationPage
@@ -172,20 +178,35 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
             </IconButton>
           </Toolbar>
 
-          {conversationsLoading ? (
+          {conversationsLoading && !conversations.length ? (
             <Stack flex={1} alignItems="center" justifyContent="center">
               <Typography color="text.secondary">
                 Loading conversations...
               </Typography>
             </Stack>
-          ) : conversationsError ? (
+          ) : conversationsError || profilesError ? (
             <Stack flex={1} alignItems="center" justifyContent="center">
               <Typography color="error">
                 Failed to load conversations.
               </Typography>
+              <Button
+                onClick={() => {
+                  retryConversations();
+                  if (participantIds.length) void retryProfiles();
+                }}
+              >
+                Retry
+              </Button>
             </Stack>
           ) : (
-            <UserList users={users} />
+            <>
+              <UserList users={users} />
+              {conversations.length === pageSize && (
+                <Button onClick={() => setPageSize((value) => value + 30)}>
+                  Load more conversations
+                </Button>
+              )}
+            </>
           )}
         </Paper>
 
@@ -198,6 +219,7 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
             display: isBelowMd && !isConversationPage ? "none" : "flex",
             flexDirection: "column",
             flex: 1,
+            minWidth: 0,
           }}
         >
           {children}

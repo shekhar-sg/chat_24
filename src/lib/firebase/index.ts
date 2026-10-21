@@ -9,6 +9,13 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+for (const [key, value] of Object.entries(firebaseConfig)) {
+  if (!value?.trim())
+    throw new Error(
+      `Missing Firebase browser configuration: ${key}. See .env.example.`
+    );
+}
+
 export const firebaseApp = getApps().length
   ? getApp()
   : initializeApp(firebaseConfig);

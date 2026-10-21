@@ -8,7 +8,12 @@ const ConversationPage = (props: {
 }) => {
   const params = use(props.params);
 
-  return <Conversation conversationId={params.conversationId} />;
+  return (
+    <Conversation
+      key={params.conversationId}
+      conversationId={params.conversationId}
+    />
+  );
 };
 
 export default ConversationPage;

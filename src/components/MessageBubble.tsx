@@ -1,5 +1,6 @@
 "use client";
 
+import { isCloudinaryFileUrl } from "@/lib/chat";
 import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import InsertDriveFileRoundedIcon from "@mui/icons-material/InsertDriveFileRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
@@ -96,6 +97,13 @@ const MessageBubble = ({
   const isEmoji = !file && text.length > 0 && /^\p{Emoji}+$/u.test(text);
   const isSingleEmoji = isEmoji && [...text].length === 1;
   const isImage =
+    Boolean(
+      file &&
+        isCloudinaryFileUrl(
+          file.fileUrl,
+          process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ""
+        )
+    ) &&
     typeof file?.contentType === "string" &&
     file.contentType.startsWith("image/");
   const isPdf = file?.contentType === "application/pdf";
@@ -161,15 +169,22 @@ const MessageBubble = ({
           bgcolor: isMe ? "success.main" : "background.paper",
           color: isMe ? "secondary.contrastText" : "text.primary",
           border: "1px solid",
-          borderColor: isMe
-            ? "success.main"
-            : "grey.300",
+          borderColor: isMe ? "success.main" : "grey.300",
           boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
           overflow: "hidden",
         }}
       >
         {file && isImage && (
           <Box
+            role="button"
+            tabIndex={0}
+            aria-label={`Preview ${file.fileName}`}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onFileClick?.(file);
+              }
+            }}
             onClick={() => onFileClick?.(file)}
             sx={{
               position: "relative",
@@ -203,6 +218,15 @@ const MessageBubble = ({
 
         {file && !isImage && (
           <Box
+            role="button"
+            tabIndex={0}
+            aria-label={`Preview ${file.fileName}`}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onFileClick?.(file);
+              }
+            }}
             onClick={() => onFileClick?.(file)}
             sx={{
               display: "flex",

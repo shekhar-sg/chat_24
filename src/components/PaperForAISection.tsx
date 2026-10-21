@@ -1,11 +1,13 @@
 "use client";
 
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
 import { sxToArray } from "@/utils/helpers";
-import { Drawer, Paper, type PaperProps } from "@mui/material";
+import { Drawer, Paper, useMediaQuery, type PaperProps } from "@mui/material";
 
 const PaperForAISection = (props: PaperProps) => {
+  const dispatch = useAppDispatch();
+  const isBelowLg = useMediaQuery((theme) => theme.breakpoints.down("lg"));
   const { children, ...restProps } = props;
   const isAIChatSidebarOpen = useAppSelector(
     ({ appConfig }) => appConfig.isAIChatSidebarOpen
@@ -14,8 +16,8 @@ const PaperForAISection = (props: PaperProps) => {
     <>
       <Drawer
         variant="temporary"
-        open={isAIChatSidebarOpen}
-        onClose={() => toggleAIChatSidebar(false)}
+        open={isAIChatSidebarOpen && isBelowLg}
+        onClose={() => dispatch(toggleAIChatSidebar(false))}
         anchor={"right"}
         sx={{
           display: { xs: "block", lg: "none" },
@@ -26,6 +28,7 @@ const PaperForAISection = (props: PaperProps) => {
           },
           paper: {
             ...restProps,
+            sx: { width: "min(440px, 100vw)" },
           },
         }}
       >
@@ -36,6 +39,7 @@ const PaperForAISection = (props: PaperProps) => {
         sx={[
           {
             display: { xs: "none", lg: "flex" },
+            flexShrink: 0,
           },
           (theme) =>
             isAIChatSidebarOpen

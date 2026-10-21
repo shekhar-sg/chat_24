@@ -69,4 +69,4 @@ const generateTheme = (
 
 export default generateTheme;
 
-export const gradientForAI = 'linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%)'
+export const gradientForAI = "linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%)";

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { adminAuth } from "@/lib/firebase/firebase-admin";
+import { getCurrentUser } from "@/lib/firebase/get-current-user";
+import { isSameOrigin } from "@/lib/server/request";
 
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 5;
 const RECENT_SIGN_IN_WINDOW_SECONDS = 5 * 60;
 const CSRF_COOKIE_NAME = "csrfToken";
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const body = await request.json();
 
@@ -33,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    const decodedToken = await adminAuth.verifyIdToken(idToken, true);
 
     const authTime = decodedToken.auth_time;
 
@@ -63,6 +67,8 @@ export async function POST(request: Request) {
       path: "/",
     });
 
+    response.cookies.delete(CSRF_COOKIE_NAME);
+
     return response;
   } catch (error) {
     console.error("Failed to create auth session:", error);
@@ -71,7 +77,9 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  if (!isSameOrigin(request))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const response = NextResponse.json({ success: true });
 
   response.cookies.set({
@@ -85,4 +93,12 @@ export async function DELETE() {
   });
 
   return response;
+}
+
+export async function GET() {
+  const user = await getCurrentUser();
+  return NextResponse.json(
+    user ? { uid: user.uid } : { error: "Unauthorized" },
+    { status: user ? 200 : 401, headers: { "Cache-Control": "no-store" } }
+  );
 }

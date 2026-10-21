@@ -1,390 +1,184 @@
 "use client";
-
+import { InsertEmoticonRounded, Close } from "@mui/icons-material";
 import {
-  Bolt,
-  Bookmarks,
-  ExpandMoreRounded,
-  InsertEmoticonRounded,
-} from "@mui/icons-material";
-import {
+  Alert,
   Box,
   Button,
-  ButtonGroup,
-  Divider,
   IconButton,
-  InputAdornment,
-  Menu,
-  MenuItem,
   Popover,
   Stack,
   TextField,
   Typography,
-  Zoom,
-  Tooltip,
 } from "@mui/material";
-import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
-import {
-  type KeyboardEvent,
-  type MouseEvent,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
 import FileUploadButton, {
   type UploadedFile,
 } from "@/components/FileUpoadButton";
+import { MAX_MESSAGE_LENGTH } from "@/lib/chat";
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
-interface MessageInputProps {
-  onSend: (message: string, file?: UploadedFile) => Promise<void>;
-  disabled?: boolean;
-  onTypingChange?: (isTyping: boolean) => void;
-}
-
-const MessageInput = ({
+export default function MessageInput({
+  conversationId,
   onSend,
   disabled = false,
   onTypingChange,
-}: MessageInputProps) => {
+}: {
+  conversationId: string;
+  onSend: (text: string, file?: UploadedFile) => Promise<void>;
+  disabled?: boolean;
+  onTypingChange?: (typing: boolean) => void;
+}) {
   const [message, setMessage] = useState("");
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isTypingRef = useRef(false);
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [uploading, setUploading] = useState(false);
-
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-
-  const [emojiAnchorEl, setEmojiAnchorEl] = useState<HTMLButtonElement | null>(
-    null
-  );
-
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const openMenu = Boolean(anchorEl);
-  const openEmojiPicker = Boolean(emojiAnchorEl);
-
-  const isBusy = disabled || uploading;
-
-  const handleEmojiClick = (event: MouseEvent<HTMLButtonElement>) => {
-    setEmojiAnchorEl(event.currentTarget);
-  };
-
-  const handleEmojiClose = () => {
-    setEmojiAnchorEl(null);
-  };
-
-  const handleEmojiSelect = (emojiData: EmojiClickData) => {
-    setMessage((previous) => previous + emojiData.emoji);
-    inputRef.current?.focus();
-  };
-
-  const handleMessageChange = (value: string) => {
+  const sendingRef = useRef(false);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingWrite = useRef(0);
+  const busy = disabled || uploading || sending;
+  const changeMessage = (value: string) => {
     setMessage(value);
-
+    if (typingTimer.current) clearTimeout(typingTimer.current);
     if (!value.trim()) {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-
-      if (isTypingRef.current) {
-        isTypingRef.current = false;
-        onTypingChange?.(false);
-      }
-
+      onTypingChange?.(false);
+      lastTypingWrite.current = 0;
       return;
     }
-
-    if (!isTypingRef.current) {
-      isTypingRef.current = true;
+    if (Date.now() - lastTypingWrite.current > 2000) {
       onTypingChange?.(true);
+      lastTypingWrite.current = Date.now();
     }
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      isTypingRef.current = false;
+    typingTimer.current = setTimeout(() => {
       onTypingChange?.(false);
-      typingTimeoutRef.current = null;
+      lastTypingWrite.current = 0;
     }, 1500);
   };
-
-  const handleSend = async () => {
-    const trimmedMessage = message.trim();
-
-    if (isBusy) {
-      return;
-    }
-
-    if (!trimmedMessage && !file) {
-      return;
-    }
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
+  useEffect(
+    () => () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      onTypingChange?.(false);
+    },
+    [onTypingChange]
+  );
+  const send = async () => {
+    if (busy || sendingRef.current || (!message.trim() && !file)) return;
+    sendingRef.current = true;
+    setSending(true);
+    setError(null);
+    if (typingTimer.current) clearTimeout(typingTimer.current);
     onTypingChange?.(false);
-
+    lastTypingWrite.current = 0;
     try {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-
-      if (isTypingRef.current) {
-        isTypingRef.current = false;
-        onTypingChange?.(false);
-      }
-      await onSend(trimmedMessage, file ?? undefined);
-
+      await onSend(message.trim(), file || undefined);
       setMessage("");
       setFile(null);
-
-      inputRef.current?.focus();
+      requestAnimationFrame(() => inputRef.current?.focus());
     } catch {
-      // Keep the message/file so the user can retry.
+      setError(
+        "Message could not be sent. Your draft is saved here; try again."
+      );
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   };
-
-  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-
-      void handleSend();
-    }
-  };
-
-  const handleMenuClick = (event: MouseEvent<HTMLButtonElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleFileUpload = (uploadedFile: UploadedFile) => {
-    setFile(uploadedFile);
-    setUploading(false);
-  };
-
-  const handleFileUploadStart = () => {
-    setUploading(true);
-  };
-
-  const handleFileUploadError = (error: unknown) => {
-    console.error("Cloudinary upload failed:", error);
-    setUploading(false);
-  };
-
-  const handleClose = () => {
-    setUploading(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      if (isTypingRef.current) {
-        onTypingChange?.(false);
-      }
-    };
-  }, [onTypingChange]);
-
   return (
-    <Box
-      sx={{
-        width: "100%",
-        bgcolor: "background.paper",
-        border: 1,
-        borderColor: "divider",
-        px: { xs: 1, sm: 3 },
-        py: 2,
-        position: "sticky",
-        bottom: 0,
-        borderRadius: 1,
-      }}
-    >
-      <Stack direction="column" gap={1}>
-        <TextField
-          fullWidth
-          multiline
-          maxRows={6}
-          size="small"
-          placeholder="Type a message..."
-          value={message}
-          onChange={(event) => handleMessageChange(event.target.value)}
-          onKeyDown={handleInputKeyDown}
-          variant="standard"
-          inputRef={inputRef}
-          disabled={isBusy}
-          sx={{
-            flex: 1,
-            px: 2,
-            py: 1,
+    <Box sx={{ borderTop: 1, borderColor: "divider", pt: 1, flexShrink: 0 }}>
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      <TextField
+        fullWidth
+        multiline
+        maxRows={6}
+        label="Message"
+        placeholder="Type a message..."
+        inputRef={inputRef}
+        value={message}
+        disabled={busy}
+        onChange={(event) => changeMessage(event.target.value)}
+        onKeyDown={(event) => {
+          if (
+            event.key === "Enter" &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing
+          ) {
+            event.preventDefault();
+            void send();
+          }
+        }}
+        slotProps={{ htmlInput: { maxLength: MAX_MESSAGE_LENGTH } }}
+      />
+      <Stack direction="row" alignItems="center" spacing={1} mt={1}>
+        <FileUploadButton
+          conversationId={conversationId}
+          disabled={busy}
+          onUpload={setFile}
+          onUploadStart={() => {
+            setError(null);
+            setUploading(true);
           }}
-          slotProps={{
-            input: {
-              disableUnderline: true,
-              sx: {
-                p: 0,
-                border: "none",
-                boxShadow: "none",
-              },
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Tooltip
-                    title="Emojis"
-                    followCursor
-                    arrow
-                    slots={{ transition: Zoom }}
-                  >
-                    <IconButton
-                      color="primary"
-                      onClick={handleEmojiClick}
-                      size="small"
-                      disabled={isBusy}
-                    >
-                      <InsertEmoticonRounded fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-
-                  <Popover
-                    open={openEmojiPicker}
-                    anchorEl={emojiAnchorEl}
-                    onClose={handleEmojiClose}
-                    anchorOrigin={{
-                      vertical: "top",
-                      horizontal: "left",
-                    }}
-                  >
-                    <EmojiPicker onEmojiClick={handleEmojiSelect} />
-                  </Popover>
-                </InputAdornment>
-              ),
-            },
-          }}
+          onUploadError={() =>
+            setError(
+              "Upload failed. Choose an image or PDF up to 10 MB and try again."
+            )
+          }
+          onClose={() => setUploading(false)}
         />
-
-        <Stack direction="row" alignItems="center" gap={0.5}>
-          <FileUploadButton
-            disabled={isBusy}
-            onUpload={handleFileUpload}
-            onUploadStart={handleFileUploadStart}
-            onUploadError={handleFileUploadError}
-            onClose={handleClose}
+        <IconButton
+          aria-label="Choose emoji"
+          disabled={busy}
+          onClick={(event) => setEmojiAnchor(event.currentTarget)}
+        >
+          <InsertEmoticonRounded />
+        </IconButton>
+        <Popover
+          open={Boolean(emojiAnchor)}
+          anchorEl={emojiAnchor}
+          onClose={() => setEmojiAnchor(null)}
+          anchorOrigin={{ vertical: "top", horizontal: "left" }}
+        >
+          <EmojiPicker
+            width={300}
+            onEmojiClick={(emoji) => {
+              changeMessage(
+                (message + emoji.emoji).slice(0, MAX_MESSAGE_LENGTH)
+              );
+              setEmojiAnchor(null);
+              inputRef.current?.focus();
+            }}
           />
-
-          <Tooltip
-            title="Bookmarks"
-            followCursor
-            arrow
-            slots={{ transition: Zoom }}
-          >
-            <IconButton color="primary" disabled={isBusy} size="small">
-              <Bookmarks fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          <Divider orientation="vertical" flexItem variant="middle" />
-
-          <Tooltip
-            title="Instant reply"
-            followCursor
-            arrow
-            slots={{ transition: Zoom }}
-          >
-            <IconButton color="primary" disabled={isBusy} size="small">
-              <Bolt fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          <Box flex={1} />
-
-          <ButtonGroup
-            variant="contained"
-            disabled={isBusy || (!message.trim() && !file)}
-            disableElevation
-          >
-            <Button
-              onClick={() => {
-                void handleSend();
-              }}
-            >
-              {uploading ? "Uploading..." : disabled ? "Sending..." : "Send"}
-            </Button>
-
-            <Button
-              size="small"
-              id="basic-button"
-              aria-controls={openMenu ? "basic-menu" : undefined}
-              aria-haspopup="true"
-              aria-expanded={openMenu ? "true" : undefined}
-              onClick={handleMenuClick}
-              disabled={isBusy}
-              sx={{
-                minWidth: "0px !important",
-                px: 1,
-              }}
-            >
-              <ExpandMoreRounded fontSize="small" />
-            </Button>
-          </ButtonGroup>
-          <Menu
-            id={"basic-menu"}
-            anchorEl={anchorEl}
-            open={openMenu}
-            onClose={handleMenuClose}
-            transformOrigin={{
-              horizontal: "center",
-              vertical: "bottom",
-            }}
-            anchorOrigin={{
-              horizontal: "left",
-              vertical: "top",
-            }}
-          >
-            <MenuItem onClick={handleMenuClose}>Schedule</MenuItem>
-            <MenuItem onClick={handleMenuClose}>Add Timer</MenuItem>
-          </Menu>
-        </Stack>
-
-        {file && (
-          <Stack direction="row" gap={1} mt={1} flexWrap="wrap">
-            <Box
-              sx={{
-                bgcolor: "#f7f8fa",
-                px: 2,
-                py: 1,
-                borderRadius: 2,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
-            >
-              <Typography fontSize={13}>{file.fileName}</Typography>
-
-              <Button
-                size="small"
-                color="error"
-                onClick={() => setFile(null)}
-                disabled={isBusy}
-                sx={{
-                  minWidth: 0,
-                  px: 1,
-                }}
-              >
-                x
-              </Button>
-            </Box>
-          </Stack>
-        )}
+        </Popover>
+        <Box flex={1} />
+        <Button
+          variant="contained"
+          disabled={busy || (!message.trim() && !file)}
+          onClick={() => void send()}
+        >
+          {uploading ? "Uploading..." : sending ? "Sending..." : "Send"}
+        </Button>
       </Stack>
+      {file && (
+        <Stack direction="row" alignItems="center" mt={1} gap={1}>
+          <Typography variant="body2" noWrap>
+            {file.fileName}
+          </Typography>
+          <IconButton
+            aria-label="Remove attachment"
+            size="small"
+            disabled={busy}
+            onClick={() => setFile(null)}
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </Stack>
+      )}
     </Box>
   );
-};
-
-export default MessageInput;
+}

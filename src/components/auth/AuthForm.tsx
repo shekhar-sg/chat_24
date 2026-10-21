@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Alert,
@@ -14,8 +14,17 @@ import {
 } from "@mui/material";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
-import { signInWithEmail, signUpWithEmail } from "@/lib/firebase/auth";
-import { useRouter } from "next/navigation";
+import {
+  signInWithEmail,
+  signUpWithEmail,
+  signOutUser,
+} from "@/lib/firebase/auth";
+
+import { updateProfile } from "firebase/auth";
+import {
+  createServerSession,
+  clearServerSession,
+} from "@/lib/firebase/session-client";
 
 type AuthMode = "login" | "signup";
 
@@ -43,18 +52,21 @@ const authCopy = {
 } satisfies Record<AuthMode, object>;
 
 export default function AuthForm({ mode }: AuthFormProps) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
 
   const copy = authCopy[mode];
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (loading) return;
     setError("");
     setLoading(true);
 
@@ -64,63 +76,31 @@ export default function AuthForm({ mode }: AuthFormProps) {
           ? await signInWithEmail(email.trim(), password)
           : await signUpWithEmail(email.trim(), password);
 
-      const csrfResponse = await fetch("/api/auth/csrf", {
-        credentials: "same-origin",
-      });
-
-      if (!csrfResponse.ok) {
-        throw new Error("Failed to initialize secure authentication.");
-      }
-
-      const { csrfToken } = await csrfResponse.json();
-
-      if (typeof csrfToken !== "string") {
-        throw new Error("Failed to initialize secure authentication.");
-      }
-
-      const idToken = await credential.user.getIdToken();
-
-      const sessionResponse = await fetch("/api/auth/session", {
+      if (mode === "signup")
+        await updateProfile(credential.user, {
+          displayName: displayName.trim(),
+        });
+      await createServerSession(credential.user);
+      const profileResponse = await fetch("/api/users", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idToken,
-          csrfToken,
+          displayName:
+            credential.user.displayName || email.trim().split("@")[0],
         }),
       });
+      if (!profileResponse.ok)
+        throw new Error("Profile setup failed. Please sign in to retry.");
 
-      if (!sessionResponse.ok) {
-        throw new Error("Failed to create server session.");
-      }
-
-      if (mode === "signup") {
-        const profileResponse = await fetch("/api/users", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            displayName: email.trim().split("@")[0],
-            email: credential.user.email,
-            photoURL: credential.user.photoURL,
-            status: null,
-          }),
-        });
-
-        if (!profileResponse.ok) {
-          throw new Error("Failed to create user profile.");
-        }
-      }
-
-      router.replace("/");
+      window.location.replace("/");
     } catch (err) {
+      await clearServerSession().catch(() => {});
+      await signOutUser().catch(() => {});
       console.error("Authentication error:", err);
       setError(
         mode === "login"
           ? "Unable to sign in. Please check your email and password."
-          : "Unable to create your account. Please check your details and try again."
+          : "Unable to finish account setup. Check your details, or sign in if your account was already created."
       );
     } finally {
       setLoading(false);
@@ -191,8 +171,21 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
           <Box component="form" onSubmit={handleSubmit}>
             <Stack spacing={2}>
+              {mode === "signup" && (
+                <TextField
+                  label="Display name"
+                  disabled={!ready || loading}
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  autoComplete="name"
+                  required
+                  fullWidth
+                  slotProps={{ htmlInput: { maxLength: 80 } }}
+                />
+              )}
               <TextField
                 label="Email"
+                disabled={!ready || loading}
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -203,6 +196,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
               <TextField
                 label="Password"
+                disabled={!ready || loading}
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
@@ -211,13 +205,22 @@ export default function AuthForm({ mode }: AuthFormProps) {
                 }
                 required
                 fullWidth
+                slotProps={{
+                  htmlInput: {
+                    minLength: mode === "signup" ? 8 : undefined,
+                    maxLength: 128,
+                  },
+                }}
+                helperText={
+                  mode === "signup" ? "Use at least 8 characters." : undefined
+                }
               />
 
               <Button
                 type="submit"
                 variant="contained"
                 size="large"
-                disabled={loading}
+                disabled={!ready || loading}
                 fullWidth
                 sx={{
                   minHeight: 48,
