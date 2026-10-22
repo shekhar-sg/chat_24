@@ -34,7 +34,7 @@ Enable Email/Password authentication in the existing Firebase project's console.
 
 ## Gemini AI Assistant
 
-Set server-only `GEMINI_API_KEY` from Google AI Studio. `GEMINI_MODEL` defaults to `gemini-2.5-flash`; the implementation uses the official `@google/genai` SDK. No paid fallback is configured. Keep the project on the free tier if you require zero inference spend; actual quotas are account-specific and shown in AI Studio. Missing credentials disable assistant requests with a clear message without blocking chat.
+Set server-only `GEMINI_API_KEY` from Google AI Studio. `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`; the implementation uses the official `@google/genai` SDK. Older `gemini-2.5-flash` configurations may return 404 for new accounts; update that environment variable and restart/redeploy. Gemini 3 models use thinking levels rather than the legacy Gemini 2.5 thinking budget. No paid fallback is configured. Keep the project on the free tier if you require zero inference spend; actual quotas are account-specific and shown in AI Studio. Missing credentials disable assistant requests with a clear message without blocking chat.
 
 The server verifies the session, request origin, and conversation membership before loading the latest 30 messages. Only bounded message text/captions are included: no attachments, file URLs, other conversations, or profile emails. Context is capped at 12,000 characters; prompts at 2,000 characters, assistant history at six turns, and answers at 512 tokens. The panel clears on conversation changes and informs users that relevant text goes to Gemini.
 
@@ -118,3 +118,13 @@ Runtime dependencies include compatible security overrides for gRPC and PostCSS.
 - Nine Firestore emulator tests cover the existing access rules plus denial of client reads/writes to assistant quota documents.
 - Production dependency audit reports zero vulnerabilities, including optional dependencies.
 - Firebase/Cloudinary read-only service checks passed. A Gemini key is not configured locally; live model behavior still requires a smoke test with a key. No live rules or hosting deployment was performed.
+
+### Gemini model compatibility fix
+
+After a key was added, live testing found `gemini-2.5-flash` returned 404 for this account and the newer full Flash model intermittently returned 503 overload. The configured default is now `gemini-3.5-flash-lite`, with the supported Gemini 3 thinking-level configuration. Live synthetic tests passed both an allowed conversation summary and refusal of an unrelated coding request. Model availability, credentials, invalid configuration, and overload now produce distinct safe errors. Update the hosting environment's `GEMINI_MODEL` and redeploy when applying this fix.
+
+### File-send compatibility fix
+
+The inspected live legacy Firestore rules reject the optional `caption` field. File-only messages now omit empty captions instead of always sending `caption: ""`. Upload errors preserve the server's actionable error, and attachment permission failures explain that file-sharing rules need updating while retaining the selected file and draft.
+
+A minimal caption-only migration was prepared from the live release and validated against that exact rules source in the isolated emulator: file-only and captioned messages succeed, while invalid/oversized captions, outsiders, sender spoofing, and edits fail. The original release and candidate source are saved under ignored `test-results/` for review and rollback. Publication requires explicit authorization; the live rules were not changed. The checked-in full `firestore.rules` already supports captions but represents a broader hardening release and should be coordinated with deployed clients rather than substituted for this minimal compatibility fix.

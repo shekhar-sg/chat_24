@@ -165,7 +165,7 @@ const MessageBubble = ({
           width: "fit-content",
           maxWidth: { xs: "85%", sm: "70%" },
           minWidth: 52,
-          borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+          borderRadius: 0.8,
           bgcolor: isMe ? "secondary.main" : "background.paper",
           color: isMe ? "secondary.contrastText" : "text.primary",
           border: "1px solid",

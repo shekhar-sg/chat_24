@@ -62,7 +62,15 @@ export default function FileUploadButton({
               body: data,
               signal: controller.current.signal,
             });
-            if (!response.ok) throw new Error("Upload failed");
+            if (!response.ok) {
+              const failure = await response.json().catch(() => null);
+              throw new Error(
+                failure?.error ||
+                  (response.status === 413
+                    ? "The upload is too large for this server. Try a smaller file."
+                    : "Upload failed. Please try again.")
+              );
+            }
             const uploaded: UploadedFile = await response.json();
             validateAttachment(
               uploaded,

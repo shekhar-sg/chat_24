@@ -102,9 +102,11 @@ export default function MessageInput({
       setMessage("");
       setFile(null);
       requestAnimationFrame(() => inputRef.current?.focus());
-    } catch {
+    } catch (failure) {
       setError(
-        "Message could not be sent. Your draft is saved here; try again."
+        (failure as { code?: string })?.code === "permission-denied" && file
+          ? "The server rejected this attachment. File-sharing permissions need updating. Your file and draft are saved here."
+          : "Message could not be sent. Your draft is saved here; try again."
       );
     } finally {
       sendingRef.current = false;
@@ -162,9 +164,11 @@ export default function MessageInput({
             setError(null);
             setUploading(true);
           }}
-          onUploadError={() =>
+          onUploadError={(failure) =>
             setError(
-              "Upload failed. Choose an image or PDF up to 10 MB and try again."
+              failure instanceof Error && failure.message !== "Invalid file"
+                ? failure.message
+                : "Upload failed. Choose an image or PDF up to 10 MB and try again."
             )
           }
           onClose={() => setUploading(false)}

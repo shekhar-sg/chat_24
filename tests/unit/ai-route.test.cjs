@@ -139,6 +139,11 @@ test("AI route handles missing configuration, provider quotas, timeout and inter
   process.env.GEMINI_API_KEY = "test-key";
   for (const [failure, status] of [
     [{ status: 429 }, 429],
+    [{ status: 404 }, 503],
+    [{ status: 401 }, 503],
+    [{ status: 403 }, 503],
+    [{ status: 400 }, 503],
+    [{ status: 503 }, 503],
     [new Error("secret provider message"), 502],
   ]) {
     quota = null;

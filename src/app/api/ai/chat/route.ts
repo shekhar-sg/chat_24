@@ -48,6 +48,7 @@ export async function POST(request: Request) {
   }
   if (!input) return json({ error: "Invalid assistant request." }, 400);
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(30000)]);
+  let stage = "conversation";
   try {
     const conversationRef = adminDb
       .collection("conversations")
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
         },
         503
       );
+    stage = "quota";
     const quotaRef = adminDb.collection("aiRateLimits").doc(user.uid);
     const allowed = await adminDb.runTransaction(async (transaction) => {
       const quota = (await transaction.get(quotaRef)).data();
@@ -83,6 +85,7 @@ export async function POST(request: Request) {
       return json({ error: "Please wait a minute before asking again." }, 429, {
         "Retry-After": "60",
       });
+    stage = "messages";
     const snapshot = await conversationRef
       .collection("messages")
       .orderBy("createdAt", "desc")
@@ -111,6 +114,7 @@ export async function POST(request: Request) {
         return [{ ...message, text }];
       })
       .reverse();
+    stage = "gemini";
     return json(await answerWithGemini(input, bounded, signal));
   } catch (error) {
     if (signal.aborted)
@@ -119,6 +123,41 @@ export async function POST(request: Request) {
         504
       );
     const status = (error as { status?: number }).status;
+    // Never log provider payloads, credentials or chat content.
+    console.error("Assistant request failed", {
+      stage,
+      status: typeof status === "number" ? status : "unknown",
+    });
+    if (stage === "gemini" && status === 404)
+      return json(
+        {
+          error:
+            "The configured Gemini model is unavailable for this API key. Update GEMINI_MODEL on the server and restart or redeploy.",
+        },
+        503
+      );
+    if (stage === "gemini" && (status === 401 || status === 403))
+      return json(
+        {
+          error:
+            "Gemini rejected the server's API key or project permissions. Check GEMINI_API_KEY and model access.",
+        },
+        503
+      );
+    if (stage === "gemini" && status === 400)
+      return json(
+        {
+          error:
+            "Gemini rejected the server configuration. Check the API key, selected model, and supported request settings.",
+        },
+        503
+      );
+    if (stage === "gemini" && status === 503)
+      return json(
+        { error: "Gemini is currently overloaded. Please try again shortly." },
+        503,
+        { "Retry-After": "10" }
+      );
     if (status === 429)
       return json(
         {

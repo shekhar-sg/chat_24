@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, Divider, Stack, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import FilePreviewDialog, { type PreviewFile } from "./FilePreviewDialog";
 import MessageBubble from "./MessageBubble";
@@ -242,10 +242,8 @@ const MessageList = (props: MessageListProps) => {
               return (
                 <Box key={message.id}>
                   {showDateSeparator && (
-                    <Box
+                    <Divider
                       sx={{
-                        display: "flex",
-                        justifyContent: "center",
                         py: 2,
                       }}
                     >
@@ -253,7 +251,6 @@ const MessageList = (props: MessageListProps) => {
                         label={formatDateLabel(message.createdAt)}
                         size="small"
                         sx={{
-                          height: 28,
                           px: 0.5,
                           bgcolor: "action.hover",
                           color: "text.secondary",
@@ -265,7 +262,7 @@ const MessageList = (props: MessageListProps) => {
                           },
                         }}
                       />
-                    </Box>
+                    </Divider>
                   )}
 
                   {message.type === "file" ? (

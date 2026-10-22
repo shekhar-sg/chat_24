@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import {
   ACTIONS,
   parseAction,
@@ -13,7 +13,14 @@ export async function answerWithGemini(
   signal: AbortSignal
 ) {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+  const thinkingConfig = model.startsWith("gemini-2.5")
+    ? { thinkingBudget: 0 }
+    : {
+        thinkingLevel: model.includes("flash-lite")
+          ? ThinkingLevel.MINIMAL
+          : ThinkingLevel.LOW,
+      };
   const contents = JSON.stringify({
     messages,
     history: input.history,
@@ -33,7 +40,7 @@ export async function answerWithGemini(
         required: ["action"],
       },
       maxOutputTokens: 64,
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig,
       abortSignal: signal,
     },
   });
@@ -45,7 +52,7 @@ export async function answerWithGemini(
     config: {
       systemInstruction: `${SCOPE_INSTRUCTION}\nApproved action: ${action}. Perform only this action, concisely. For reply/rewrite, return only the proposed draft. If the request is out of scope, respond exactly: ${REFUSAL}`,
       maxOutputTokens: 512,
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig,
       abortSignal: signal,
     },
   });

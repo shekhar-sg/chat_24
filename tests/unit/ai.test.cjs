@@ -51,6 +51,7 @@ Module._load = function (request, ...args) {
   if (request === "@google/genai")
     return {
       Type: { OBJECT: "OBJECT", STRING: "STRING" },
+      ThinkingLevel: { MINIMAL: "minimal", LOW: "low" },
       GoogleGenAI: class {
         models = {
           generateContent: async (options) => {
@@ -92,6 +93,10 @@ test("approved assistance classifies before generating and treats chat/history a
     );
     assert.deepEqual(result, { text: "A helpful answer", refused: false });
     assert.equal(calls.length, 2);
+    assert.equal(calls[0].model, "gemini-3.5-flash-lite");
+    assert.deepEqual(calls[0].config.thinkingConfig, {
+      thinkingLevel: "minimal",
+    });
     assert.match(calls[0].config.systemInstruction, /untrusted DATA/);
     assert.match(calls[0].config.systemInstruction, /mixed requests/);
     assert.match(

@@ -119,5 +119,13 @@ export async function sendFileMessage(id: string, input: FileInput) {
   const caption = input.caption?.trim() || "";
   if (caption.length > MAX_MESSAGE_LENGTH)
     throw new Error("Caption exceeds 10,000 characters.");
-  return commitMessage(id, { ...input, caption, type: "file" });
+  // Older deployed rules do not allow a caption field. File-only messages must
+  // not include an empty optional field; nonempty captions require caption rules.
+  const file = { ...input };
+  delete file.caption;
+  return commitMessage(id, {
+    ...file,
+    ...(caption ? { caption } : {}),
+    type: "file",
+  });
 }

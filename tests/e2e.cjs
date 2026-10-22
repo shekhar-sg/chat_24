@@ -254,6 +254,8 @@ async function signup(context, name) {
       const download = await downloaded;
       expect(download.suggestedFilename()).toBe("smoke.png");
       expect(fs.statSync(await download.path()).size).toBeGreaterThan(0);
+      // Keep later interactions on the chat if Edge opens its downloads hub.
+      await alice.bringToFront();
       await alice
         .getByRole("dialog")
         .getByRole("button", { name: "Close", exact: true })
@@ -496,6 +498,7 @@ async function signup(context, name) {
     }
     await alice.screenshot({ path: "test-results/mobile-chat.png" });
     await alice.getByRole("link", { name: "Inbox", exact: true }).click();
+    await expect(alice).toHaveURL(`${baseURL}/`);
     await expect(alice.getByText("Your Inbox", { exact: true })).toBeVisible();
     console.log(
       "PASS: theme, mobile navigation, drawer Escape dismissal, no horizontal overflow"
