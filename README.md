@@ -101,6 +101,8 @@ Configure the same environment values in the host before building. Use HTTPS so 
 
 Runtime dependencies include compatible security overrides for gRPC and PostCSS. Revalidate those overrides when upgrading dependencies. Run `npm audit --omit=dev` for the deployed dependency tree; development-tool advisories are reported separately and do not justify blindly forcing major-version downgrades/upgrades.
 
+Firebase Admin's `jwks-rsa` dependency synchronously requires `jose`. A scoped `jwks-rsa -> jose@5.10.0` override preserves CommonJS compatibility on serverless runtimes where synchronous `require(ESM)` is unavailable. Other packages can retain their own `jose` versions. Commit both `package.json` and `package-lock.json`, then redeploy when changing this override. The runtime regression test loads Firebase Admin with `--no-experimental-require-module` and imports/verifies a generated RSA signing key through JWKS. Revisit the override when upstream ships a compatible loader.
+
 ## Verification record (2026-10-21)
 
 - Production build, TypeScript, and ESLint passed.
