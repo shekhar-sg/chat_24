@@ -1,54 +1,310 @@
-import { Box, Typography } from "@mui/material";
-import { useEffect, useRef } from "react";
-import MessageBubble from "./MessageBubble";
+"use client";
 
-interface Message {
-  from: string;
-  message: string;
-  time: string;
-}
+import { Box, Button, Chip, Divider, Stack, Typography } from "@mui/material";
+import { useEffect, useMemo, useRef, useState } from "react";
+import FilePreviewDialog, { type PreviewFile } from "./FilePreviewDialog";
+import MessageBubble from "./MessageBubble";
+import type { FirestoreMessage } from "@/types/firestore";
+
+type Message = FirestoreMessage & {
+  id: string;
+};
 
 interface MessageListProps {
   messages: Message[];
+  currentUserId: string;
+  conversationId: string;
+  otherUserId?: string;
+  hasMore: boolean;
+  onLoadMore: () => void;
+  readAt?: Record<string, number | null>;
 }
 
-const MessageList = ({ messages }: MessageListProps) => {
+const getMessageDate = (createdAt: FirestoreMessage["createdAt"]) => {
+  if (!createdAt) {
+    return null;
+  }
+
+  return new Date(createdAt);
+};
+
+const formatMessageTime = (createdAt: FirestoreMessage["createdAt"]) => {
+  const date = getMessageDate(createdAt);
+
+  if (!date) {
+    return "";
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const getDateKey = (createdAt: FirestoreMessage["createdAt"]) => {
+  const date = getMessageDate(createdAt);
+
+  if (!date) {
+    return "";
+  }
+
+  return [date.getFullYear(), date.getMonth(), date.getDate()].join("-");
+};
+
+const formatDateLabel = (createdAt: FirestoreMessage["createdAt"]) => {
+  const date = getMessageDate(createdAt);
+
+  if (!date) {
+    return "";
+  }
+
+  const today = new Date();
+
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  const messageStart = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate()
+  );
+
+  const difference = todayStart.getTime() - messageStart.getTime();
+
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  if (difference === 0) {
+    return "Today";
+  }
+
+  if (difference === oneDay) {
+    return "Yesterday";
+  }
+
+  if (difference > 0 && difference < 7 * oneDay) {
+    return date.toLocaleDateString([], {
+      weekday: "long",
+    });
+  }
+
+  return date.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+};
+
+const MessageList = (props: MessageListProps) => {
+  const {
+    messages,
+    currentUserId,
+    readAt,
+    otherUserId,
+    conversationId,
+    hasMore,
+    onLoadMore,
+  } = props;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previousLastId = useRef<string | undefined>(undefined);
+  const previousHeight = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    previousLastId.current = undefined;
+    previousHeight.current = null;
+    nearBottomRef.current = true;
+  }, [conversationId]);
+
+  const [selectedFile, setSelectedFile] = useState<PreviewFile | null>(null);
+
+  const groupedMessages = useMemo(() => {
+    let previousDateKey: string | null = null;
+
+    return messages.map((message) => {
+      const dateKey = getDateKey(message.createdAt);
+      const showDateSeparator = dateKey !== previousDateKey;
+
+      previousDateKey = dateKey;
+
+      return {
+        message,
+        showDateSeparator,
+      };
+    });
   }, [messages]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container && previousHeight.current !== null) {
+      container.scrollTop += container.scrollHeight - previousHeight.current;
+      previousHeight.current = null;
+    } else if (previousLastId.current !== messages.at(-1)?.id) {
+      if (
+        !previousLastId.current ||
+        nearBottomRef.current ||
+        messages.at(-1)?.senderId === currentUserId
+      )
+        container?.scrollTo({
+          top: container.scrollHeight,
+          behavior: "instant",
+        });
+    }
+    previousLastId.current = messages.at(-1)?.id;
+  }, [messages, currentUserId]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      if (nearBottomRef.current) container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(container);
+    const content = container.querySelector("[data-message-content]");
+    if (content) observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  const otherUserReadAt = otherUserId ? (readAt?.[otherUserId] ?? null) : null;
+
+  const isMessageSeen = (message: Message) => {
+    return (
+      message.senderId === currentUserId &&
+      otherUserReadAt !== null &&
+      message.createdAt !== null &&
+      message.createdAt <= otherUserReadAt
+    );
+  };
+
   return (
-    <Box
-      sx={{
-        flex: 1,
-        overflowY: "auto",
-        pt: 3,
-        pb: 2,
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        scrollbarWidth: "none",
-      }}
-    >
-      {messages.length === 0 ? (
-        <Typography color="text.secondary" textAlign="center" mt={4}>
-          No messages yet. Start the conversation!
-        </Typography>
-      ) : (
-        messages.map((msg, idx) => (
-          <MessageBubble
-            key={idx}
-            from={msg.from}
-            message={msg.message}
-            time={msg.time}
-            isMe={msg.from === "Me"}
-          />
-        ))
-      )}
-      <div ref={bottomRef} />
-    </Box>
+    <>
+      <Box
+        ref={containerRef}
+        role="log"
+        aria-label="Messages"
+        onScroll={() => {
+          const container = containerRef.current;
+          if (container)
+            nearBottomRef.current =
+              container.scrollHeight -
+                container.scrollTop -
+                container.clientHeight <
+              100;
+        }}
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          overscrollBehaviorY: "contain",
+          touchAction: "pan-y pinch-zoom",
+          pt: 2,
+          pb: 2,
+          display: "flex",
+          flexDirection: "column",
+          scrollbarWidth: "thin",
+        }}
+      >
+        {hasMore && (
+          <Button
+            onClick={() => {
+              previousHeight.current =
+                containerRef.current?.scrollHeight ?? null;
+              onLoadMore();
+            }}
+          >
+            Load older messages
+          </Button>
+        )}
+        {messages.length === 0 ? (
+          <Stack flex={1} alignItems="center" justifyContent="center" px={3}>
+            <Typography color="text.secondary" textAlign="center" fontSize={14}>
+              No messages yet.
+            </Typography>
+
+            <Typography
+              color="text.disabled"
+              textAlign="center"
+              fontSize={13}
+              mt={0.5}
+            >
+              Start the conversation!
+            </Typography>
+          </Stack>
+        ) : (
+          <Stack gap={0} data-message-content sx={{ flexShrink: 0 }}>
+            {groupedMessages.map(({ message, showDateSeparator }) => {
+              const isMe = message.senderId === currentUserId;
+
+              return (
+                <Box key={message.id}>
+                  {showDateSeparator && (
+                    <Divider
+                      sx={{
+                        py: 2,
+                      }}
+                    >
+                      <Chip
+                        label={formatDateLabel(message.createdAt)}
+                        size="small"
+                        sx={{
+                          px: 0.5,
+                          bgcolor: "action.hover",
+                          color: "text.secondary",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          borderRadius: 999,
+                          "& .MuiChip-label": {
+                            px: 1.5,
+                          },
+                        }}
+                      />
+                    </Divider>
+                  )}
+
+                  {message.type === "file" ? (
+                    <MessageBubble
+                      message={message.caption}
+                      time={formatMessageTime(message.createdAt)}
+                      isMe={isMe}
+                      seen={isMessageSeen(message)}
+                      file={{
+                        fileName: message.fileName,
+                        fileUrl: message.fileUrl,
+                        fileSize: message.fileSize,
+                        contentType: message.contentType,
+                      }}
+                      onFileClick={(file) =>
+                        setSelectedFile({ ...file, messageId: message.id })
+                      }
+                    />
+                  ) : (
+                    <MessageBubble
+                      message={message.text}
+                      time={formatMessageTime(message.createdAt)}
+                      isMe={isMe}
+                      seen={isMessageSeen(message)}
+                    />
+                  )}
+                </Box>
+              );
+            })}
+          </Stack>
+        )}
+
+        <div ref={bottomRef} />
+      </Box>
+
+      <FilePreviewDialog
+        conversationId={conversationId}
+        file={selectedFile}
+        open={Boolean(selectedFile)}
+        onClose={() => setSelectedFile(null)}
+      />
+    </>
   );
 };
 

@@ -20,15 +20,18 @@ import {
 import { type ChangeEvent, type MouseEvent, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import LogoutButton from "@/components/auth/LogoutButton";
 
 export interface User {
   id: string;
+  conversationId?: string;
   name: string;
   avatarUrl?: string;
   status?: string; // e.g. 'online', 'offline', 'typing...'
   isGroup?: boolean;
   groupMembers?: string[]; // for group chats
-  unreadCount?: number;
+  unread?: boolean;
+  lastMessageAt?: number;
   conversation?: { from: string; message: string; time: string }[]; // optional, for conversation history
 }
 
@@ -45,7 +48,7 @@ const getLastMessage = (user: User) => {
   }
 };
 
-function stringToColor(string: string) {
+export function stringToColor(string: string) {
   let hash = 0;
   let i;
 
@@ -106,10 +109,8 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       );
     })
     .sort((a, b) => {
-      const lastA = getLastMessage(a);
-      const lastB = getLastMessage(b);
       if (sortBy === "recent") {
-        return (lastB?.time || "").localeCompare(lastA?.time || "");
+        return (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0);
       } else if (sortBy === "name") {
         return a.name.localeCompare(b.name);
       }
@@ -117,18 +118,12 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
     });
 
   return (
-    <Box
-      display="flex"
-      flexDirection="column"
-      height={(theme) => ({
-        xs: `calc(100% - ${theme.spacing(8)})`,
-        md: `calc(100% - ${theme.spacing(10)})`,
-      })}
-    >
+    <Box display="flex" flexDirection="column" flex={1} minHeight={0}>
       {/* Search and sort */}
       <Box display="flex" alignItems="center" px={2} py={1.5} gap={1}>
         <InputBase
           placeholder="Search chats"
+          inputProps={{ "aria-label": "Search chats" }}
           value={search}
           onChange={handleSearchChange}
           sx={{
@@ -143,7 +138,12 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
             <Search sx={{ mr: 1, color: "text.secondary" }} fontSize="small" />
           }
         />
-        <IconButton onClick={handleSortClick} size="small" sx={{ ml: 1 }}>
+        <IconButton
+          aria-label="Sort conversations"
+          onClick={handleSortClick}
+          size="small"
+          sx={{ ml: 1 }}
+        >
           <Sort fontSize="small" />
         </IconButton>
         <Menu anchorEl={anchorEl} open={open} onClose={() => handleSortClose()}>
@@ -163,11 +163,16 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       </Box>
       <Divider />
       {/* Chat list, flex: 1 for scrollable area */}
-      <Box flex={1} minHeight={0} overflow="auto">
+      <Box
+        flex={1}
+        minHeight={0}
+        overflow="auto"
+        sx={{ overscrollBehaviorY: "contain", touchAction: "pan-y" }}
+      >
         <List dense>
           {filteredUsers.length === 0 && (
             <Box p={3} textAlign="center" color="text.secondary">
-              No chats yet
+              {search ? "No matching chats" : "No chats yet"}
             </Box>
           )}
           {filteredUsers.map((user) => {
@@ -178,9 +183,10 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
               <ListItem key={user.id} alignItems="flex-start">
                 <ListItemButton
                   component={Link}
-                  href={`/conversation/${user.id}`}
+                  href={`/conversation/${user.conversationId ?? user.id}`}
                   selected={
-                    params?.userID === user.id || selectedUserId === user.id
+                    params?.conversationId === user.conversationId ||
+                    selectedUserId === user.id
                   }
                   onClick={() => onSelectUser?.(user.id)}
                   alignItems="flex-start"
@@ -218,7 +224,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
                       >
                         {user.isGroup ? (
                           <Box component="span" fontSize={20}>
-                            👥
+                            ðŸ‘¥
                           </Box>
                         ) : user.name ? (
                           user.name[0].toUpperCase()
@@ -336,7 +342,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
                             {user.status}
                           </Typography>
                         )}
-                        {user.unreadCount && user.unreadCount > 0 ? (
+                        {user.unread ? (
                           <Box
                             ml={0.5}
                             px={0.7}
@@ -351,7 +357,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
                             fontWeight={600}
                             sx={{ minWidth: 18, textAlign: "center" }}
                           >
-                            {user.unreadCount}
+                            <span aria-label="Unread messages">●</span>
                           </Box>
                         ) : null}
                       </Box>
@@ -366,7 +372,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       {/* Toggle buttons at bottom left */}
       <Box
         display="flex"
-        justifyContent="flex-start"
+        justifyContent="space-between"
         alignItems="center"
         px={2}
         py={1}
@@ -385,6 +391,7 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
             <ViewList fontSize="small" />
           </ToggleButton>
         </ToggleButtonGroup>
+        <LogoutButton variant={"button"} />
       </Box>
     </Box>
   );

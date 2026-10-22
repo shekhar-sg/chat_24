@@ -1,0 +1,265 @@
+"use client";
+
+import { Add } from "@mui/icons-material";
+import {
+  Button,
+  IconButton,
+  Paper,
+  Stack,
+  Toolbar,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
+import { usePathname } from "next/navigation";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+
+import AISectionTabs from "@/components/AISectionTabs";
+import NewConversation from "@/components/NewConversation";
+import PaperForAISection from "@/components/PaperForAISection";
+import UserList from "@/components/UserList";
+import { useGetConversationsQuery } from "@/store/api/conversationsApi";
+import { useGetUsersByIdsQuery } from "@/store/api/usersApi";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { hasUnreadMessage, messagePreview } from "@/lib/chat";
+import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
+
+export default function ChatLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
+  const isConversationPage = pathname.startsWith("/conversation/");
+  const isBelowMd = useMediaQuery((theme) => theme.breakpoints.down("md"));
+  const isBelowLg = useMediaQuery((theme) => theme.breakpoints.down("lg"));
+
+  const dispatch = useAppDispatch();
+  const authUser = useAppSelector((state) => state.auth.user);
+
+  const [pageSize, setPageSize] = useState(30);
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
+  // Mobile keyboards resize the visual viewport, not always the layout viewport.
+  const [viewportHeight, setViewportHeight] = useState<string>("100dvh");
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const update = () => {
+      if (!viewport || viewport.scale !== 1) return;
+      setViewportHeight(`${viewport.height}px`);
+    };
+    update();
+    viewport?.addEventListener("resize", update);
+    return () => viewport?.removeEventListener("resize", update);
+  }, []);
+
+  const {
+    data: conversations = [],
+    isLoading: conversationsLoading,
+    isError: conversationsError,
+    refetch: retryConversations,
+  } = useGetConversationsQuery(authUser?.uid, pageSize);
+
+  const participantIds = useMemo(() => {
+    if (!authUser?.uid) {
+      return [];
+    }
+
+    return [
+      ...new Set(
+        conversations.flatMap((conversation) => conversation.participantIds)
+      ),
+    ].filter((uid) => uid !== authUser.uid);
+  }, [conversations, authUser?.uid]);
+
+  const {
+    data: participantUsers = [],
+    isError: profilesError,
+    refetch: retryProfiles,
+  } = useGetUsersByIdsQuery(participantIds.join(","), {
+    skip: participantIds.length === 0,
+  });
+
+  const usersById = useMemo(() => {
+    return new Map(participantUsers.map((user) => [user.id, user]));
+  }, [participantUsers]);
+
+  const users = useMemo(() => {
+    return conversations.flatMap((conversation) => {
+      const otherUserId = conversation.participantIds.find(
+        (uid) => uid !== authUser?.uid
+      );
+
+      if (!otherUserId) {
+        return [];
+      }
+
+      const profile = usersById.get(otherUserId);
+
+      const lastMessage = conversation.lastMessage;
+
+      return [
+        {
+          id: otherUserId,
+          conversationId: conversation.id,
+          name: profile?.displayName || profile?.email || "Unknown user",
+          avatarUrl: profile?.photoURL || undefined,
+          status: profile?.status || undefined,
+          isGroup: false,
+          unread: Boolean(
+            authUser?.uid && hasUnreadMessage(conversation, authUser.uid)
+          ),
+          lastMessageAt:
+            conversation.lastMessageAt ?? conversation.createdAt ?? 0,
+          conversation: lastMessage
+            ? [
+                {
+                  from: lastMessage.senderId,
+                  message: messagePreview(lastMessage),
+                  time: conversation.lastMessageAt
+                    ? new Date(conversation.lastMessageAt).toLocaleTimeString(
+                        [],
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      )
+                    : "",
+                },
+              ]
+            : [],
+        },
+      ];
+    });
+  }, [authUser?.uid, conversations, usersById]);
+
+  useEffect(() => {
+    if (isBelowLg) {
+      dispatch(toggleAIChatSidebar(false));
+    }
+  }, [dispatch, isBelowLg]);
+
+  return (
+    <>
+      <Stack
+        direction="row"
+        height={viewportHeight}
+        width="100%"
+        overflow="hidden"
+        gap={1}
+        p={{
+          xs: 0,
+          md: 1,
+        }}
+        position="relative"
+      >
+        <Paper
+          variant="outlined"
+          sx={{
+            width: {
+              xs: "100%",
+              md: 320,
+              xl: 380,
+            },
+            border: 1,
+            borderColor: "divider",
+            flexShrink: 0,
+            overflow: "hidden",
+            display:
+              isBelowMd && !isConversationPage
+                ? "flex"
+                : !isBelowMd
+                  ? "flex"
+                  : "none",
+            flexDirection: "column",
+            minHeight: 0,
+          }}
+        >
+          <Toolbar
+            sx={{
+              bgcolor: "background.default",
+              display: "flex",
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography variant="h6" component="div" fontWeight="bold">
+              Your Inbox
+            </Typography>
+
+            <IconButton
+              size="small"
+              onClick={() => setNewConversationOpen(true)}
+              aria-label="Start new conversation"
+            >
+              <Add />
+            </IconButton>
+          </Toolbar>
+
+          {conversationsLoading && !conversations.length ? (
+            <Stack flex={1} alignItems="center" justifyContent="center">
+              <Typography color="text.secondary">
+                Loading conversations...
+              </Typography>
+            </Stack>
+          ) : conversationsError || profilesError ? (
+            <Stack flex={1} alignItems="center" justifyContent="center">
+              <Typography color="error">
+                Failed to load conversations.
+              </Typography>
+              <Button
+                onClick={() => {
+                  retryConversations();
+                  if (participantIds.length) void retryProfiles();
+                }}
+              >
+                Retry
+              </Button>
+            </Stack>
+          ) : (
+            <>
+              <UserList users={users} />
+              {conversations.length === pageSize && (
+                <Button onClick={() => setPageSize((value) => value + 30)}>
+                  Load more conversations
+                </Button>
+              )}
+            </>
+          )}
+        </Paper>
+
+        <Paper
+          variant="outlined"
+          sx={{
+            border: 1,
+            borderColor: "divider",
+            overflow: "hidden",
+            display: isBelowMd && !isConversationPage ? "none" : "flex",
+            flexDirection: "column",
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+          }}
+        >
+          {children}
+        </Paper>
+
+        <PaperForAISection
+          variant="outlined"
+          sx={{
+            width: {
+              xs: "100%",
+              md: 440,
+            },
+            border: 1,
+            borderColor: "divider",
+            overflow: "hidden",
+            flexDirection: "column",
+            minHeight: 0,
+          }}
+        >
+          <AISectionTabs />
+        </PaperForAISection>
+      </Stack>
+
+      <NewConversation
+        open={newConversationOpen}
+        onClose={() => setNewConversationOpen(false)}
+      />
+    </>
+  );
+}

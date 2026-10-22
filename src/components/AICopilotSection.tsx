@@ -1,129 +1,240 @@
+"use client";
+
 import { ArrowUpward } from "@mui/icons-material";
 import {
+  Alert,
   Box,
+  Button,
+  CircularProgress,
   IconButton,
-  InputAdornment,
+  Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import { type KeyboardEvent, useRef, useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import type { HistoryTurn } from "@/lib/ai-policy";
 
-const AICopilotSection = () => {
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([
-    { sender: "ai", text: "Hello! How can I assist you today?" },
-  ]);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+type Turn = HistoryTurn & { refused?: boolean };
 
+export default function AICopilotSection() {
+  const params = useParams<{ conversationId?: string }>();
+  return (
+    <Assistant
+      key={params.conversationId || "inbox"}
+      conversationId={params.conversationId}
+    />
+  );
+}
+
+function Assistant({ conversationId }: { conversationId?: string }) {
+  const [prompt, setPrompt] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const pending = useRef(false);
+  useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [turns, busy]);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text: message },
-      { sender: "ai", text: getAIResponse(message) },
-    ]);
-    setMessage("");
-    inputRef.current?.focus();
-  };
-
-  function getAIResponse(userMsg: string) {
-    if (userMsg.toLowerCase().includes("hello")) return "Hi there!";
-    if (userMsg.toLowerCase().includes("ai")) return "I'm your AI Copilot!";
-    if (userMsg.toLowerCase().includes("help")) return "How can I help you?";
-    return "I'm here to assist you.";
-  }
-
-  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const send = async (text = prompt) => {
+    if (!conversationId || !text.trim() || pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError(null);
+    setDraftNotice(null);
+    const history = turns
+      .slice(-6)
+      .map(({ role, text }) => ({ role, text: text.slice(0, 4000) }));
+    controller.current = new AbortController();
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, prompt: text, history }),
+        signal: controller.current.signal,
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Unable to reach the assistant.");
+      setTurns((previous) => [
+        ...previous,
+        { role: "user", text },
+        { role: "assistant", text: data.text, refused: data.refused },
+      ]);
+      setPrompt("");
+    } catch (failure) {
+      if (!controller.current?.signal.aborted)
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : "Unable to reach the assistant."
+        );
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   };
 
   return (
-    <Box
-      sx={{
-        height: "100%",
-        display: "inline-flex",
-        flexDirection: "column",
-      }}
-    >
-      <Box sx={{ p: 2 }}>
-        <Typography variant={"h2"} gutterBottom>
-          AI Copilot
+    <Stack height="100%" minHeight={0} spacing={2}>
+      <Box flexShrink={0}>
+        <Typography variant="h6" fontWeight={650}>
+          AI Assistant
         </Typography>
-        <Typography variant={"body1"}>
-          The AI Copilot assists you in various tasks, providing suggestions and
-          automating repetitive actions. It learns from your interactions to
-          improve its responses over time.
+        <Typography variant="body2" color="text.secondary" mt={0.5}>
+          Summaries, reply drafts, rewriting, and translations for this
+          conversation.
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          display="block"
+          mt={1}
+        >
+          Relevant message text is sent to Gemini when you ask. Review drafts
+          before sending.
         </Typography>
       </Box>
-      <Box sx={{ flex: 1, overflowY: "auto", px: 2, py: 1 }}>
-        {messages.map((msg, idx) => (
+      {!conversationId ? (
+        <Alert severity="info">
+          Open a conversation to get help with that chat.
+        </Alert>
+      ) : (
+        <Stack direction="row" gap={1} flexWrap="wrap" flexShrink={0}>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={busy}
+            onClick={() =>
+              void send(
+                "Suggest a reply to the latest message in this conversation."
+              )
+            }
+          >
+            Suggest reply
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={busy}
+            onClick={() => void send("Summarize this conversation.")}
+          >
+            Summarize chat
+          </Button>
+        </Stack>
+      )}
+      <Box
+        ref={logRef}
+        flex={1}
+        minHeight={0}
+        overflow="auto"
+        role="log"
+        aria-label="AI assistant responses"
+        sx={{ overscrollBehaviorY: "contain", overflowWrap: "anywhere" }}
+      >
+        {!turns.length && (
+          <Typography variant="body2" color="text.secondary" py={3}>
+            Ask about a message, or start with a quick action above.
+          </Typography>
+        )}
+        {turns.map((turn, index) => (
           <Box
-            key={idx}
+            key={index}
             sx={{
-              display: "flex",
-              justifyContent: msg.sender === "user" ? "flex-end" : "flex-start",
-              mb: 1,
+              mb: 2,
+              p: 1.5,
+              borderRadius: 2,
+              bgcolor:
+                turn.role === "user" ? "action.hover" : "background.paper",
+              border: 1,
+              borderColor: "divider",
             }}
           >
-            <Box
-              sx={{
-                bgcolor: msg.sender === "user" ? "primary.main" : "grey.200",
-                color:
-                  msg.sender === "user"
-                    ? "primary.contrastText"
-                    : "text.primary",
-                px: 2,
-                py: 1,
-                borderRadius: 2,
-                maxWidth: "70%",
-                wordBreak: "break-word", // Ensures long words break to next line
-                overflowWrap: "break-word", // Fallback for extra-long words
-              }}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontWeight={600}
             >
-              <Typography variant="body2">{msg.text}</Typography>
-            </Box>
+              {turn.role === "user" ? "You" : "Gemini"}
+            </Typography>
+            <Typography variant="body2" whiteSpace="pre-wrap" mt={0.5}>
+              {turn.text}
+            </Typography>
+            {turn.role === "assistant" && !turn.refused && (
+              <Button
+                size="small"
+                sx={{ mt: 1 }}
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent("chat:insert-draft", {
+                      detail: { conversationId, text: turn.text },
+                    })
+                  );
+                  setDraftNotice(
+                    "Added to your message draft. Review it in the conversation before sending."
+                  );
+                }}
+              >
+                Insert draft
+              </Button>
+            )}
           </Box>
         ))}
-        <div ref={messagesEndRef} />
+        {busy && (
+          <Stack direction="row" alignItems="center" gap={1} role="status">
+            <CircularProgress size={16} />
+            <Typography variant="caption">
+              Working on this conversation…
+            </Typography>
+          </Stack>
+        )}
       </Box>
-      <Box sx={{ mt: "auto", pt: 3 }}>
+      {draftNotice && (
+        <Alert severity="success" onClose={() => setDraftNotice(null)}>
+          {draftNotice}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      <Stack direction="row" alignItems="flex-end" gap={1} flexShrink={0}>
         <TextField
           fullWidth
-          variant="outlined"
-          placeholder="Ask a follow-up question..."
-          inputRef={inputRef}
-          value={message}
-          onKeyDown={handleInputKeyDown}
-          onChange={(e) => setMessage(e.target.value)}
-          slotProps={{
-            input: {
-              endAdornment: (
-                <InputAdornment position={"end"}>
-                  <IconButton
-                    color="primary"
-                    size="small"
-                    onClick={() => {
-                      handleSend();
-                    }}
-                  >
-                    <ArrowUpward fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
+          multiline
+          maxRows={4}
+          label="Ask about this chat"
+          value={prompt}
+          disabled={!conversationId || busy}
+          onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              event.preventDefault();
+              void send();
+            }
           }}
+          slotProps={{ htmlInput: { maxLength: 2000 } }}
         />
-      </Box>
-    </Box>
+        <IconButton
+          aria-label="Ask AI assistant"
+          disabled={!conversationId || busy || !prompt.trim()}
+          onClick={() => void send()}
+          sx={{ mb: 1 }}
+        >
+          <ArrowUpward />
+        </IconButton>
+      </Stack>
+    </Stack>
   );
-};
-
-export default AICopilotSection;
+}

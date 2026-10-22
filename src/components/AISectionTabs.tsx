@@ -2,10 +2,9 @@
 import AICopilotSection from "@/components/AICopilotSection";
 import { useAppDispatch } from "@/store/hooks";
 import { toggleAIChatSidebar } from "@/store/slices/appConfigSlice";
-import { gradientForAI } from "@/styles/theme";
 import { AutoFixOff } from "@mui/icons-material";
 import { TabContext, TabList, TabPanel } from "@mui/lab";
-import { IconButton, Tab, Toolbar, Box, type Theme } from "@mui/material";
+import { IconButton, Tab, Toolbar, type Theme } from "@mui/material";
 import type { SxProps } from "@mui/system";
 import { type SyntheticEvent, useState } from "react";
 import AIDetailsSection from "./AIDetailsSection";
@@ -29,7 +28,7 @@ const AISectionTabs = () => {
       >
         <TabList
           onChange={handleChange}
-          aria-label="lab API tabs example"
+          aria-label="Conversation assistant tabs"
           sx={{
             height: "100%",
           }}
@@ -56,7 +55,7 @@ const AISectionTabs = () => {
             }}
           />
           <Tab
-            label={<CopilotGradientText />}
+            label="AI Assistant"
             value="2"
             disableRipple
             sx={{
@@ -92,25 +91,9 @@ const AISectionTabs = () => {
 export default AISectionTabs;
 
 const tabPanelSx: SxProps<Theme> = (theme) => ({
-  height: {
-    xs: `calc(100% - ${theme.spacing(8)})`,
-    md: `calc(100% - ${theme.spacing(10)})`,
-  },
+  flex: 1,
+  minHeight: 0,
+  p: { xs: 2, md: 3 },
+  paddingBottom: `max(${theme.spacing(2)}, env(safe-area-inset-bottom))`,
   overflow: "hidden",
 });
-
-const CopilotGradientText = () => {
-  return (
-    <Box
-      component={"span"}
-      style={{
-        background: gradientForAI,
-        WebkitBackgroundClip: "text",
-        WebkitTextFillColor: "transparent",
-        fontWeight: "bold",
-      }}
-    >
-      Copilot
-    </Box>
-  );
-};
