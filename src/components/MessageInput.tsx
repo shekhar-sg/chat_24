@@ -39,7 +39,32 @@ export default function MessageInput({
   const sendingRef = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingWrite = useRef(0);
+  useEffect(() => {
+    const insert = (event: Event) => {
+      const { conversationId: targetId, text } = (
+        event as CustomEvent<{ conversationId: string; text: string }>
+      ).detail;
+      if (targetId !== conversationId || typeof text !== "string") return;
+      setMessage((previous) =>
+        (previous ? `${previous}\n${text}` : text).slice(0, MAX_MESSAGE_LENGTH)
+      );
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    window.addEventListener("chat:insert-draft", insert);
+    return () => window.removeEventListener("chat:insert-draft", insert);
+  }, [conversationId]);
   const busy = disabled || uploading || sending;
+  useEffect(() => {
+    const stop = () => {
+      if (document.visibilityState === "hidden") {
+        if (typingTimer.current) clearTimeout(typingTimer.current);
+        onTypingChange?.(false);
+        lastTypingWrite.current = 0;
+      }
+    };
+    document.addEventListener("visibilitychange", stop);
+    return () => document.removeEventListener("visibilitychange", stop);
+  }, [onTypingChange]);
   const changeMessage = (value: string) => {
     setMessage(value);
     if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -87,7 +112,15 @@ export default function MessageInput({
     }
   };
   return (
-    <Box sx={{ borderTop: 1, borderColor: "divider", pt: 1, flexShrink: 0 }}>
+    <Box
+      sx={{
+        borderTop: 1,
+        borderColor: "divider",
+        pt: 1,
+        pb: "env(safe-area-inset-bottom)",
+        flexShrink: 0,
+      }}
+    >
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
           {error}
@@ -96,13 +129,18 @@ export default function MessageInput({
       <TextField
         fullWidth
         multiline
-        maxRows={6}
+        maxRows={4}
         label="Message"
         placeholder="Type a message..."
         inputRef={inputRef}
         value={message}
         disabled={busy}
         onChange={(event) => changeMessage(event.target.value)}
+        onBlur={() => {
+          if (typingTimer.current) clearTimeout(typingTimer.current);
+          onTypingChange?.(false);
+          lastTypingWrite.current = 0;
+        }}
         onKeyDown={(event) => {
           if (
             event.key === "Enter" &&

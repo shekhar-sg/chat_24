@@ -35,6 +35,18 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
 
   const [pageSize, setPageSize] = useState(30);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
+  // Mobile keyboards resize the visual viewport, not always the layout viewport.
+  const [viewportHeight, setViewportHeight] = useState<string>("100dvh");
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const update = () => {
+      if (!viewport || viewport.scale !== 1) return;
+      setViewportHeight(`${viewport.height}px`);
+    };
+    update();
+    viewport?.addEventListener("resize", update);
+    return () => viewport?.removeEventListener("resize", update);
+  }, []);
 
   const {
     data: conversations = [],
@@ -126,8 +138,8 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
     <>
       <Stack
         direction="row"
-        height="100dvh"
-        width="100vw"
+        height={viewportHeight}
+        width="100%"
         overflow="hidden"
         gap={1}
         p={{
@@ -155,7 +167,7 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
                   ? "flex"
                   : "none",
             flexDirection: "column",
-            boxShadow: "inset 0 0 8px rgba(0,0,0,0.1)",
+            minHeight: 0,
           }}
         >
           <Toolbar
@@ -215,11 +227,12 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
           sx={{
             border: 1,
             borderColor: "divider",
-            overflowY: "auto",
+            overflow: "hidden",
             display: isBelowMd && !isConversationPage ? "none" : "flex",
             flexDirection: "column",
             flex: 1,
             minWidth: 0,
+            minHeight: 0,
           }}
         >
           {children}
@@ -234,9 +247,9 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
             },
             border: 1,
             borderColor: "divider",
-            overflowY: "auto",
+            overflow: "hidden",
             flexDirection: "column",
-            boxShadow: "inset 0 0 8px rgba(0,0,0,0.1)",
+            minHeight: 0,
           }}
         >
           <AISectionTabs />

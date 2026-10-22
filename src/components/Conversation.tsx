@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ChatToolbar from "@/components/ChatToolbar";
 import MessageInput from "@/components/MessageInput";
 import MessageList from "@/components/MessageList";
+import TypingIndicator from "@/components/TypingIndicator";
 import {
   markConversationAsRead,
   sendFileMessage,
@@ -168,11 +169,6 @@ export default function Conversation({
             {notice}
           </Alert>
         )}
-        {typing && (
-          <Typography variant="caption" role="status" px={2}>
-            Typing...
-          </Typography>
-        )}
         {loading && !messages.length ? (
           <Stack flex={1} alignItems="center" justifyContent="center">
             <CircularProgress aria-label="Loading messages" />
@@ -202,7 +198,12 @@ export default function Conversation({
             onLoadMore={() => setPageSize((value) => value + 100)}
           />
         )}
+        <TypingIndicator
+          active={typing && authorized && !failed}
+          name={otherUser?.displayName || "Other participant"}
+        />
         <MessageInput
+          key={conversationId}
           conversationId={conversationId}
           onSend={handleSend}
           onTypingChange={handleTypingChange}

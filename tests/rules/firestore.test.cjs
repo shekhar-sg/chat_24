@@ -93,6 +93,23 @@ async function send(db, id, fields) {
   return batch.commit();
 }
 
+test("AI quota documents cannot be read or changed by clients", async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "aiRateLimits", "alice"), {
+      startedAt: Date.now(),
+      count: 5,
+    });
+  });
+  for (const db of [
+    alice,
+    outsider,
+    env.unauthenticatedContext().firestore(),
+  ]) {
+    await assertFails(getDoc(doc(db, "aiRateLimits", "alice")));
+    await assertFails(setDoc(doc(db, "aiRateLimits", "alice"), { count: 0 }));
+  }
+});
+
 test("signed-in member directory is read-only; unauthenticated users see nothing", async () => {
   await assertSucceeds(
     getDocs(

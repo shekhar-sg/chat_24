@@ -10,7 +10,7 @@ A responsive direct-messaging app built with Next.js 15, React, TypeScript, MUI,
 - JPG, PNG, WebP, and PDF attachments up to 10 MiB, optional captions, previews, and membership-checked downloads.
 - Draft retention and visible retry states for failed sends, uploads, downloads, and data subscriptions.
 - Mobile inbox navigation, dismissible copilot drawer, accessible controls, and persistent light/dark theme.
-- A **Copilot UI demo** with predefined replies. No AI model or external AI provider is connected.
+- A Gemini AI Assistant for active-chat summaries, reply drafts, rewriting, explanations, and translations. Drafts are inserted for review and never sent automatically.
 
 ## Local setup
 
@@ -31,6 +31,16 @@ npm run dev
 Open [localhost:3000](http://localhost:3000). The environment checker prints only variable names/statuses. The service checker makes read-only Firebase database-metadata and Cloudinary ping requests.
 
 Enable Email/Password authentication in the existing Firebase project's console. Add the local and production hostnames to Authentication's authorized domains where needed. The Firebase Admin service account needs Auth/session and Firestore access.
+
+## Gemini AI Assistant
+
+Set server-only `GEMINI_API_KEY` from Google AI Studio. `GEMINI_MODEL` defaults to `gemini-2.5-flash`; the implementation uses the official `@google/genai` SDK. No paid fallback is configured. Keep the project on the free tier if you require zero inference spend; actual quotas are account-specific and shown in AI Studio. Missing credentials disable assistant requests with a clear message without blocking chat.
+
+The server verifies the session, request origin, and conversation membership before loading the latest 30 messages. Only bounded message text/captions are included: no attachments, file URLs, other conversations, or profile emails. Context is capped at 12,000 characters; prompts at 2,000 characters, assistant history at six turns, and answers at 512 tokens. The panel clears on conversation changes and informs users that relevant text goes to Gemini.
+
+An initial structured scope classifier allows only summaries, replies, rewriting, explanations, and translations for the active conversation. Uncertain, malformed, mixed-scope, and unrelated requests are refused before answer generation. Server-controlled instructions treat all message content and supplied history as untrusted data; clients cannot supply system roles. These controls are behavioral safeguards, not model fine-tuning or a guarantee of perfect model compliance. The assistant has no tools, browser access, or message-sending ability.
+
+Classification and generation share a 30-second cancellation signal. Each assistant request uses up to two Gemini calls. A transactional, server-only `aiRateLimits/{uid}` document limits each user to five requests per fixed minute across application instances; existing default-deny Firestore rules prevent client access. Quota and provider failures return safe, actionable errors without exposing provider details. Automated tests mock Gemini; live smoke verification requires a configured key.
 
 ## Firebase rules and indexes
 
@@ -100,3 +110,11 @@ Runtime dependencies include compatible security overrides for gRPC and PostCSS.
 - Firebase and Cloudinary credentials passed read-only checks.
 - `npm audit --omit=dev`: zero reported vulnerabilities. Seven high-severity advisories remain in development-tool dependency chains involving `braces`; no upstream compatible fix was available.
 - Live Firebase rules/index publication and hosting deployment were not performed.
+
+## UI and Gemini update (2026-10-22)
+
+- Production build, TypeScript, ESLint, and 13 unit/API tests passed.
+- Browser regression passed auth layouts at 360px/390px/desktop, password visibility, real two-user typing, messaging, history pagination, failed-send recovery, Gemini response/draft insertion with a mocked API, touch swipes, drawer dismissal, reduced viewport height, and unauthorized access.
+- Nine Firestore emulator tests cover the existing access rules plus denial of client reads/writes to assistant quota documents.
+- Production dependency audit reports zero vulnerabilities, including optional dependencies.
+- Firebase/Cloudinary read-only service checks passed. A Gemini key is not configured locally; live model behavior still requires a smoke test with a key. No live rules or hosting deployment was performed.

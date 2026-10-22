@@ -17,7 +17,6 @@ import {
   toggleAIChatSidebar,
   toggleThemeMode,
 } from "@/store/slices/appConfigSlice";
-import { gradientForAI } from "@/styles/theme";
 import { sxToArray } from "@/utils/helpers";
 import type { UserWithId } from "@/store/api/usersApi";
 
@@ -99,7 +98,7 @@ function ChatToolbar(props: ChatToolbarProps) {
               })
             );
           }}
-          size={"small"}
+          size={"medium"}
         >
           <Brightness4 fontSize={"small"} />
         </IconButton>
@@ -121,9 +120,10 @@ function ChatToolbar(props: ChatToolbarProps) {
           <IconButton
             aria-label="open AI drawer"
             onClick={() => dispatch(toggleAIChatSidebar())}
-            size={"small"}
+            size={"medium"}
             sx={{
-              backgroundImage: gradientForAI,
+              bgcolor: "secondary.main",
+              "&:hover": { bgcolor: "secondary.dark" },
               color: "common.white",
             }}
           >

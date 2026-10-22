@@ -48,14 +48,14 @@ const MessageMeta = ({
         color: overlay
           ? "rgba(255,255,255,0.88)"
           : isMe
-            ? "rgba(255,255,255,0.64)"
+            ? "rgba(255,255,255,0.8)"
             : "text.secondary",
       }}
     >
       <Typography
         component="span"
         sx={{
-          fontSize: 10,
+          fontSize: 11,
           lineHeight: 1.2,
           fontWeight: 500,
           whiteSpace: "nowrap",
@@ -165,12 +165,12 @@ const MessageBubble = ({
           width: "fit-content",
           maxWidth: { xs: "85%", sm: "70%" },
           minWidth: 52,
-          borderRadius: isMe ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
-          bgcolor: isMe ? "success.main" : "background.paper",
+          borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+          bgcolor: isMe ? "secondary.main" : "background.paper",
           color: isMe ? "secondary.contrastText" : "text.primary",
           border: "1px solid",
-          borderColor: isMe ? "success.main" : "grey.300",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
+          borderColor: isMe ? "secondary.main" : "divider",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
           overflow: "hidden",
         }}
       >
@@ -204,7 +204,7 @@ const MessageBubble = ({
                 width: "100%",
                 maxWidth: 420,
                 maxHeight: 460,
-                minWidth: { xs: 180, sm: 220 },
+                minWidth: 0,
                 objectFit: "cover",
                 transition: "transform 180ms ease",
               }}
@@ -232,7 +232,8 @@ const MessageBubble = ({
               display: "flex",
               alignItems: "center",
               gap: 1.25,
-              minWidth: { xs: 230, sm: 280 },
+              width: { xs: "min(230px, 58vw)", sm: 280 },
+              minWidth: 0,
               px: 1.25,
               pt: 1.25,
               pb: 0.7,
@@ -279,7 +280,7 @@ const MessageBubble = ({
         )}
 
         {text && (
-          <Box sx={{ px: 1.3, pt: 0.85, pb: 0.15 }}>
+          <Box sx={{ px: 1.75, pt: 1.1, pb: 0.25 }}>
             <Typography
               component="div"
               sx={{

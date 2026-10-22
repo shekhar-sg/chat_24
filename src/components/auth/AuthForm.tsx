@@ -8,11 +8,17 @@ import {
   Button,
   CircularProgress,
   Divider,
+  IconButton,
+  InputAdornment,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import {
+  ChatBubbleOutlineRounded,
+  VisibilityOffOutlined,
+  VisibilityOutlined,
+} from "@mui/icons-material";
 
 import {
   signInWithEmail,
@@ -57,6 +63,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -115,41 +122,79 @@ export default function AuthForm({ mode }: AuthFormProps) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        px: 2,
-        py: 4,
+        px: { xs: 2.5, sm: 4 },
+        py: { xs: 3, sm: 6 },
+        gap: { md: 10, lg: 16 },
         bgcolor: "background.default",
       }}
     >
+      <Stack
+        sx={{ display: { xs: "none", md: "flex" }, maxWidth: 370 }}
+        spacing={3}
+      >
+        <Stack direction="row" alignItems="center" gap={1.25}>
+          <ChatBubbleOutlineRounded color="secondary" />
+          <Typography fontWeight={700} letterSpacing={-0.5}>
+            Agent Chat
+          </Typography>
+        </Stack>
+        <Typography
+          component="p"
+          sx={{
+            fontSize: { md: 40, lg: 46 },
+            fontWeight: 650,
+            lineHeight: 1.15,
+            letterSpacing: "-1.5px",
+          }}
+        >
+          Good conversations.
+          <br />
+          Clear connections.
+        </Typography>
+        <Typography color="text.secondary" lineHeight={1.7}>
+          A focused space for your messages, shared files, and a little help
+          finding the right words.
+        </Typography>
+        <Divider sx={{ width: 48 }} />
+        <Typography variant="body2" color="text.secondary">
+          Your next conversation starts here.
+        </Typography>
+      </Stack>
       <Box
         sx={{
           width: "100%",
           maxWidth: 440,
-          p: { xs: 3, sm: 4 },
-          border: 1,
+          p: { xs: 2.5, sm: 4.5 },
+          border: { xs: 0, sm: 1 },
           borderColor: "divider",
-          borderRadius: 4,
+          borderRadius: "16px",
           bgcolor: "background.paper",
-          boxShadow: 3,
+          boxShadow: { xs: "none", sm: "0 8px 32px rgba(15,23,42,0.04)" },
         }}
       >
         <Stack spacing={3}>
-          <Stack spacing={2} alignItems="center" textAlign="center">
+          <Stack spacing={3} alignItems="flex-start" textAlign="left">
             <Box
               sx={{
-                width: 48,
-                height: 48,
-                display: "grid",
-                placeItems: "center",
-                borderRadius: 2.5,
-                bgcolor: "action.selected",
-                color: "text.primary",
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                color: "secondary.main",
               }}
             >
-              <LockOutlinedIcon />
+              <ChatBubbleOutlineRounded fontSize="small" />
+              <Typography fontSize={14} fontWeight={700} color="text.primary">
+                Agent Chat
+              </Typography>
             </Box>
 
             <Box>
-              <Typography variant="h5" fontWeight={700}>
+              <Typography
+                variant="h5"
+                component="h1"
+                fontWeight={650}
+                letterSpacing={-0.6}
+              >
                 {copy.title}
               </Typography>
 
@@ -197,7 +242,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
               <TextField
                 label="Password"
                 disabled={!ready || loading}
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={
@@ -206,7 +251,29 @@ export default function AuthForm({ mode }: AuthFormProps) {
                 required
                 fullWidth
                 slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label={
+                            showPassword ? "Hide password" : "Show password"
+                          }
+                          aria-pressed={showPassword}
+                          disabled={loading}
+                          onClick={() => setShowPassword((value) => !value)}
+                          edge="end"
+                        >
+                          {showPassword ? (
+                            <VisibilityOffOutlined fontSize="small" />
+                          ) : (
+                            <VisibilityOutlined fontSize="small" />
+                          )}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
                   htmlInput: {
+                    "aria-label": "Password",
                     minLength: mode === "signup" ? 8 : undefined,
                     maxLength: 128,
                   },
@@ -219,12 +286,13 @@ export default function AuthForm({ mode }: AuthFormProps) {
               <Button
                 type="submit"
                 variant="contained"
+                color="secondary"
                 size="large"
                 disabled={!ready || loading}
                 fullWidth
                 sx={{
                   minHeight: 48,
-                  borderRadius: 2.5,
+                  borderRadius: "10px",
                   textTransform: "none",
                   fontWeight: 600,
                 }}

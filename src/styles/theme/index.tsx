@@ -12,8 +12,8 @@ const generateTheme = (
         contrastText: isDarkMode ? "#181a20" : "#f4f6fb",
       },
       secondary: {
-        main: isDarkMode ? "#90caf9" : "#1976d2",
-        contrastText: isDarkMode ? "#0d1117" : "#fff",
+        main: isDarkMode ? "#2864c5" : "#245cc4",
+        contrastText: "#fff",
       },
       background: {
         default: isDarkMode ? "#181a20" : "#f4f6fb",
@@ -68,5 +68,3 @@ const generateTheme = (
 };
 
 export default generateTheme;
-
-export const gradientForAI = "linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%)";

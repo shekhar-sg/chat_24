@@ -163,7 +163,12 @@ const UserList = ({ users, selectedUserId, onSelectUser }: UserListProps) => {
       </Box>
       <Divider />
       {/* Chat list, flex: 1 for scrollable area */}
-      <Box flex={1} minHeight={0} overflow="auto">
+      <Box
+        flex={1}
+        minHeight={0}
+        overflow="auto"
+        sx={{ overscrollBehaviorY: "contain", touchAction: "pan-y" }}
+      >
         <List dense>
           {filteredUsers.length === 0 && (
             <Box p={3} textAlign="center" color="text.secondary">

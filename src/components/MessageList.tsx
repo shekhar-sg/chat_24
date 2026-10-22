@@ -111,6 +111,13 @@ const MessageList = (props: MessageListProps) => {
   const previousLastId = useRef<string | undefined>(undefined);
   const previousHeight = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+
+  useEffect(() => {
+    previousLastId.current = undefined;
+    previousHeight.current = null;
+    nearBottomRef.current = true;
+  }, [conversationId]);
 
   const [selectedFile, setSelectedFile] = useState<PreviewFile | null>(null);
 
@@ -136,19 +143,30 @@ const MessageList = (props: MessageListProps) => {
       container.scrollTop += container.scrollHeight - previousHeight.current;
       previousHeight.current = null;
     } else if (previousLastId.current !== messages.at(-1)?.id) {
-      const nearBottom =
-        !container ||
-        container.scrollHeight - container.scrollTop - container.clientHeight <
-          180;
       if (
         !previousLastId.current ||
-        nearBottom ||
+        nearBottomRef.current ||
         messages.at(-1)?.senderId === currentUserId
       )
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        container?.scrollTo({
+          top: container.scrollHeight,
+          behavior: "instant",
+        });
     }
     previousLastId.current = messages.at(-1)?.id;
   }, [messages, currentUserId]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      if (nearBottomRef.current) container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(container);
+    const content = container.querySelector("[data-message-content]");
+    if (content) observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
 
   const otherUserReadAt = otherUserId ? (readAt?.[otherUserId] ?? null) : null;
 
@@ -167,19 +185,27 @@ const MessageList = (props: MessageListProps) => {
         ref={containerRef}
         role="log"
         aria-label="Messages"
+        onScroll={() => {
+          const container = containerRef.current;
+          if (container)
+            nearBottomRef.current =
+              container.scrollHeight -
+                container.scrollTop -
+                container.clientHeight <
+              100;
+        }}
         sx={{
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
+          overflowX: "hidden",
+          overscrollBehaviorY: "contain",
+          touchAction: "pan-y pinch-zoom",
           pt: 2,
           pb: 2,
           display: "flex",
           flexDirection: "column",
-          scrollbarWidth: "none",
-
-          "&::-webkit-scrollbar": {
-            display: "none",
-          },
+          scrollbarWidth: "thin",
         }}
       >
         {hasMore && (
@@ -209,7 +235,7 @@ const MessageList = (props: MessageListProps) => {
             </Typography>
           </Stack>
         ) : (
-          <Stack gap={0}>
+          <Stack gap={0} data-message-content sx={{ flexShrink: 0 }}>
             {groupedMessages.map(({ message, showDateSeparator }) => {
               const isMe = message.senderId === currentUserId;
 

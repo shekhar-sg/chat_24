@@ -45,7 +45,9 @@ async function signup(context, name) {
   await page.goto(`${baseURL}/signup`);
   await page.getByLabel("Display name").fill(name);
   await page.getByLabel("Email").fill(`${name.toLowerCase()}@example.test`);
-  await page.getByLabel("Password").fill("Local-test-password-123!");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("Local-test-password-123!");
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
@@ -73,6 +75,8 @@ async function signup(context, name) {
     const a = await browser.newContext({
       baseURL,
       viewport: { width: 1440, height: 900 },
+      hasTouch: true,
+      isMobile: true,
     });
     const b = await browser.newContext({
       baseURL,
@@ -107,6 +111,38 @@ async function signup(context, name) {
     await expect(
       guestPage.getByRole("heading", { name: "Welcome back" })
     ).toBeVisible();
+    for (const width of [360, 390, 1440]) {
+      await guestPage.setViewportSize({ width, height: 844 });
+      await guestPage
+        .getByLabel("Password", { exact: true })
+        .fill("Visibility-test");
+      await guestPage
+        .getByRole("button", { name: "Show password", exact: true })
+        .click();
+      await expect(
+        guestPage.getByLabel("Password", { exact: true })
+      ).toHaveAttribute("type", "text");
+      await guestPage
+        .getByRole("button", { name: "Hide password", exact: true })
+        .click();
+      expect(
+        await guestPage.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth
+        )
+      ).toBe(true);
+      await guestPage.screenshot({ path: `test-results/login-${width}.png` });
+      await guestPage.goto(`${baseURL}/signup`);
+      await expect(
+        guestPage.getByRole("heading", { name: "Create your account" })
+      ).toBeVisible();
+      expect(
+        await guestPage.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth
+        )
+      ).toBe(true);
+      await guestPage.screenshot({ path: `test-results/signup-${width}.png` });
+      await guestPage.goto(`${baseURL}/login`);
+    }
     console.log(
       "PASS: protected pages, JSON API authorization, invalid-cookie recovery"
     );
@@ -150,6 +186,19 @@ async function signup(context, name) {
     );
 
     const conversationId = new URL(alice.url()).pathname.split("/").at(-1);
+    // A second session observes the real Firestore typing lifecycle.
+    await bob.getByLabel("Message", { exact: true }).fill("Typing a draft");
+    await expect(
+      alice.getByRole("status", { name: "Bob is typing" })
+    ).toBeVisible();
+    await bob.getByRole("button", { name: "Choose emoji" }).focus();
+    await expect(
+      alice.getByRole("status", { name: "Bob is typing" })
+    ).toHaveCount(0);
+    await bob.getByLabel("Message", { exact: true }).fill("");
+    console.log(
+      "PASS: auth layouts, password visibility and real typing lifecycle"
+    );
     expect(
       (
         await a.request.post("/api/users", {
@@ -176,13 +225,11 @@ async function signup(context, name) {
           response.url().endsWith("/api/files/upload") &&
           response.request().method() === "POST"
       );
-      await alice
-        .locator('input[type="file"]')
-        .setInputFiles({
-          name: "smoke.png",
-          mimeType: "image/png",
-          buffer: png,
-        });
+      await alice.locator('input[type="file"]').setInputFiles({
+        name: "smoke.png",
+        mimeType: "image/png",
+        buffer: png,
+      });
       const response = await uploadedResponse;
       expect(response.status()).toBe(200);
       const uploaded = await response.json();
@@ -226,7 +273,9 @@ async function signup(context, name) {
       bob.getByRole("heading", { name: "Welcome back" })
     ).toBeVisible({ timeout: 30000 });
     await bob.getByLabel("Email").fill("bob@example.test");
-    await bob.getByLabel("Password").fill("Local-test-password-123!");
+    await bob
+      .getByLabel("Password", { exact: true })
+      .fill("Local-test-password-123!");
     await bob.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(bob.getByText("Your Inbox", { exact: true })).toBeVisible({
       timeout: 30000,
@@ -237,13 +286,11 @@ async function signup(context, name) {
     await alice
       .getByLabel("Message", { exact: true })
       .fill("Caption survives failed upload");
-    await alice
-      .locator('input[type="file"]')
-      .setInputFiles({
-        name: "bad.html",
-        mimeType: "text/html",
-        buffer: Buffer.from("<html>bad</html>"),
-      });
+    await alice.locator('input[type="file"]').setInputFiles({
+      name: "bad.html",
+      mimeType: "text/html",
+      buffer: Buffer.from("<html>bad</html>"),
+    });
     await expect(
       alice.getByRole("alert").filter({ hasText: "Upload failed" })
     ).toBeVisible();
@@ -364,9 +411,32 @@ async function signup(context, name) {
     await alice.setViewportSize({ width: 390, height: 844 });
     await alice.getByRole("button", { name: "open AI drawer" }).click();
     await expect(
-      alice.getByRole("heading", { name: "Copilot demo" })
+      alice.getByRole("heading", { name: "AI Assistant" })
     ).toBeVisible();
+    await alice.route("**/api/ai/chat", async (route) => {
+      const input = route.request().postDataJSON();
+      expect(input.conversationId).toBe(conversationId);
+      await route.fulfill({
+        json: { text: "Thanks, I will follow up shortly.", refused: false },
+      });
+    });
+    await alice
+      .getByRole("button", { name: "Suggest reply", exact: true })
+      .click();
+    await alice
+      .getByRole("button", { name: "Insert draft", exact: true })
+      .click();
     await alice.keyboard.press("Escape");
+    await expect(alice.getByLabel("Message", { exact: true })).toHaveValue(
+      "Thanks, I will follow up shortly."
+    );
+    await expect(
+      alice
+        .getByRole("log", { name: "Messages", exact: true })
+        .getByText("Thanks, I will follow up shortly.", { exact: true })
+    ).toHaveCount(0);
+    await alice.getByLabel("Message", { exact: true }).fill("");
+    await alice.unroute("**/api/ai/chat");
     await expect(
       alice.getByRole("button", { name: "open AI drawer" })
     ).toBeVisible();
@@ -375,6 +445,55 @@ async function signup(context, name) {
         () => document.documentElement.scrollWidth <= window.innerWidth
       )
     ).toBe(true);
+    for (const width of [360, 390]) {
+      await alice.setViewportSize({ width, height: 844 });
+      const messages = alice.getByRole("log", {
+        name: "Messages",
+        exact: true,
+      });
+      const cdp = await a.newCDPSession(alice);
+      await cdp.send("Emulation.setTouchEmulationEnabled", {
+        enabled: true,
+        maxTouchPoints: 1,
+      });
+      const box = await messages.boundingBox();
+      // Real touch input rather than assigning scrollTop tests gesture handling.
+      const before = await messages.evaluate((node) => node.scrollTop);
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 3;
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y }],
+      });
+      for (let offset = 20; offset <= 180; offset += 20) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x, y: y + offset }],
+        });
+        // Chromium needs frames between moves to recognize a real swipe.
+        await alice.waitForTimeout(25);
+      }
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await expect
+        .poll(() => messages.evaluate((node) => node.scrollTop))
+        .toBeLessThan(before);
+      await alice.getByRole("button", { name: "open AI drawer" }).click();
+      await alice.keyboard.press("Escape");
+      await expect
+        .poll(() => alice.evaluate(() => document.body.style.overflow))
+        .not.toBe("hidden");
+      await cdp.detach();
+      await alice.setViewportSize({ width, height: 500 });
+      await alice.getByLabel("Message", { exact: true }).focus();
+      const inputBox = await alice
+        .getByLabel("Message", { exact: true })
+        .boundingBox();
+      expect(inputBox.y + inputBox.height).toBeLessThanOrEqual(500);
+      await alice.setViewportSize({ width, height: 844 });
+    }
     await alice.screenshot({ path: "test-results/mobile-chat.png" });
     await alice.getByRole("link", { name: "Inbox", exact: true }).click();
     await expect(alice.getByText("Your Inbox", { exact: true })).toBeVisible();

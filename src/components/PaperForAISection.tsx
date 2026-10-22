@@ -28,7 +28,13 @@ const PaperForAISection = (props: PaperProps) => {
           },
           paper: {
             ...restProps,
-            sx: { width: "min(440px, 100vw)" },
+            sx: {
+              width: "min(440px, 100vw)",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            },
           },
         }}
       >
